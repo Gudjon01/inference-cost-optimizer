@@ -1,1 +1,11 @@
 .vscode
+
+# Local deployment settings and secrets
+deploy/.env
+deploy/config.yaml
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
