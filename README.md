@@ -13,8 +13,8 @@ and a replay lab finds the cheaper setup on the team's own traffic.
 | 1. Compose, ClickHouse schema, vLLM and GPU exporter services | Done |
 | 2. Gateway: pass-through, streaming, records, gRPC export | Done |
 | 3. Collector: gateway ingest, vLLM and GPU scrapers, OTLP receiver, trace-id join | Done |
-| 4. Analyzer views and `ico report` | Next |
-| 5. Replay lab | Not started |
+| 4. Analyzer views and `ico report` | Done |
+| 5. Replay lab | Next |
 
 Checked against real hardware so far: vLLM 0.10.1.1 on a GeForce RTX 2060 with
 nvidia_gpu_exporter 1.15.1. Still to check on a rented datacenter GPU:
@@ -30,7 +30,7 @@ nvidia_gpu_exporter 1.15.1. Still to check on a rented datacenter GPU:
 
 ```text
 gateway/   Go module: OpenAI-compatible pass-through, plus a fake engine for tests
-py/        Python package `ico`: the collector today; analyzer, replay lab and report later
+py/        Python package `ico`: collector, analyzer and report; the replay lab later
 proto/     The gRPC contract between gateway and collector
 schema/    ClickHouse migrations, applied by the collector at startup
 deploy/    docker-compose.yml, example config, dcgm-exporter counters
@@ -68,6 +68,38 @@ Look at what was recorded:
 ```bash
 docker compose exec clickhouse sh -c 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" -d ico -q "SELECT ts, replica, tenant, prompt_tokens, completion_tokens, ttft_ms, e2e_ms FROM requests ORDER BY ts DESC LIMIT 10"'
 ```
+
+## Get the report
+
+```bash
+docker compose exec collector ico report --window 24h --out /tmp/report.html
+docker compose cp collector:/tmp/report.html report.html
+```
+
+`report.html` is one static file with no scripts and nothing loaded from
+elsewhere. It shows, for the window:
+
+- cost per million tokens, and what it would be without idle time;
+- active and idle cost per model, and idle GPU-hours;
+- the split of each replica's cost across tenants;
+- the telemetry level of each host, and the inputs every number came from.
+
+How the numbers are made:
+
+- **Cost** is GPUs x price x hours, from the first to the last sign of a
+  replica in the window. Idle hours are billed like any other. Prices come
+  from `gpu_price_per_hour` in the config.
+- **Active share** is the share of time the compute cores were active where
+  the host has DCGM profiling counters, and otherwise the share of time with
+  at least one request in flight.
+- **Tenant split** follows engine time where spans report prefill and decode
+  time, so prompt and completion tokens weigh what they took. Otherwise it
+  follows token count.
+
+The views behind it take the window as parameters and can be queried
+directly, for example
+`SELECT * FROM usage_by_tenant(since = '2026-10-14 00:00:00', until = '2026-10-15 00:00:00')`.
+They are defined in `schema/002_analyzer.sql`.
 
 ## What the gateway does
 
@@ -136,7 +168,7 @@ uv sync
 uv run pytest
 ```
 
-Three of its tests need a ClickHouse server and skip without one. With the
+Some of its tests need a ClickHouse server and skip without one. With the
 Compose stack up, set `ICO_TEST_CLICKHOUSE_HOST=localhost`,
 `ICO_TEST_CLICKHOUSE_USER=ico` and `ICO_TEST_CLICKHOUSE_PASSWORD` to run them.
 
