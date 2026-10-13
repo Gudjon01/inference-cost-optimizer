@@ -1,0 +1,351 @@
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 0
+go_gc_duration_seconds{quantile="0.25"} 0
+go_gc_duration_seconds{quantile="0.5"} 0
+go_gc_duration_seconds{quantile="0.75"} 0
+go_gc_duration_seconds{quantile="1"} 0
+go_gc_duration_seconds_sum 0
+go_gc_duration_seconds_count 0
+# HELP go_gc_gogc_percent Heap size target percentage configured by the user, otherwise 100. This value is set by the GOGC environment variable, and the runtime/debug.SetGCPercent function. Sourced from /gc/gogc:percent.
+# TYPE go_gc_gogc_percent gauge
+go_gc_gogc_percent 100
+# HELP go_gc_gomemlimit_bytes Go runtime memory limit configured by the user, otherwise math.MaxInt64. This value is set by the GOMEMLIMIT environment variable, and the runtime/debug.SetMemoryLimit function. Sourced from /gc/gomemlimit:bytes.
+# TYPE go_gc_gomemlimit_bytes gauge
+go_gc_gomemlimit_bytes 9.223372036854776e+18
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 11
+# HELP go_info Information about the Go environment.
+# TYPE go_info gauge
+go_info{version="go1.27.1"} 1
+# HELP go_memstats_alloc_bytes Number of bytes allocated in heap and currently in use. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_alloc_bytes gauge
+go_memstats_alloc_bytes 652416
+# HELP go_memstats_alloc_bytes_total Total number of bytes allocated in heap until now, even if released already. Equals to /gc/heap/allocs:bytes.
+# TYPE go_memstats_alloc_bytes_total counter
+go_memstats_alloc_bytes_total 652416
+# HELP go_memstats_buck_hash_sys_bytes Number of bytes used by the profiling bucket hash table. Equals to /memory/classes/profiling/buckets:bytes.
+# TYPE go_memstats_buck_hash_sys_bytes gauge
+go_memstats_buck_hash_sys_bytes 1.445473e+06
+# HELP go_memstats_frees_total Total number of heap objects frees. Equals to /gc/heap/frees:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_frees_total counter
+go_memstats_frees_total 41
+# HELP go_memstats_gc_sys_bytes Number of bytes used for garbage collection system metadata. Equals to /memory/classes/metadata/other:bytes.
+# TYPE go_memstats_gc_sys_bytes gauge
+go_memstats_gc_sys_bytes 1.58544e+06
+# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and currently in use, same as go_memstats_alloc_bytes. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_heap_alloc_bytes gauge
+go_memstats_heap_alloc_bytes 652416
+# HELP go_memstats_heap_idle_bytes Number of heap bytes waiting to be used. Equals to /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_idle_bytes gauge
+go_memstats_heap_idle_bytes 4.448256e+06
+# HELP go_memstats_heap_inuse_bytes Number of heap bytes that are in use. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes
+# TYPE go_memstats_heap_inuse_bytes gauge
+go_memstats_heap_inuse_bytes 3.252224e+06
+# HELP go_memstats_heap_objects Number of currently allocated objects. Equals to /gc/heap/objects:objects.
+# TYPE go_memstats_heap_objects gauge
+go_memstats_heap_objects 3825
+# HELP go_memstats_heap_released_bytes Number of heap bytes released to OS. Equals to /memory/classes/heap/released:bytes.
+# TYPE go_memstats_heap_released_bytes gauge
+go_memstats_heap_released_bytes 4.448256e+06
+# HELP go_memstats_heap_sys_bytes Number of heap bytes obtained from system. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes + /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_sys_bytes gauge
+go_memstats_heap_sys_bytes 7.70048e+06
+# HELP go_memstats_last_gc_time_seconds Number of seconds since 1970 of last garbage collection.
+# TYPE go_memstats_last_gc_time_seconds gauge
+go_memstats_last_gc_time_seconds 0
+# HELP go_memstats_mallocs_total Total number of heap objects allocated, both live and gc-ed. Semantically a counter version for go_memstats_heap_objects gauge. Equals to /gc/heap/allocs:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_mallocs_total counter
+go_memstats_mallocs_total 3866
+# HELP go_memstats_mcache_inuse_bytes Number of bytes in use by mcache structures. Equals to /memory/classes/metadata/mcache/inuse:bytes.
+# TYPE go_memstats_mcache_inuse_bytes gauge
+go_memstats_mcache_inuse_bytes 27552
+# HELP go_memstats_mcache_sys_bytes Number of bytes used for mcache structures obtained from system. Equals to /memory/classes/metadata/mcache/inuse:bytes + /memory/classes/metadata/mcache/free:bytes.
+# TYPE go_memstats_mcache_sys_bytes gauge
+go_memstats_mcache_sys_bytes 32144
+# HELP go_memstats_mspan_inuse_bytes Number of bytes in use by mspan structures. Equals to /memory/classes/metadata/mspan/inuse:bytes.
+# TYPE go_memstats_mspan_inuse_bytes gauge
+go_memstats_mspan_inuse_bytes 66240
+# HELP go_memstats_mspan_sys_bytes Number of bytes used for mspan structures obtained from system. Equals to /memory/classes/metadata/mspan/inuse:bytes + /memory/classes/metadata/mspan/free:bytes.
+# TYPE go_memstats_mspan_sys_bytes gauge
+go_memstats_mspan_sys_bytes 81600
+# HELP go_memstats_next_gc_bytes Number of heap bytes when next garbage collection will take place. Equals to /gc/heap/goal:bytes.
+# TYPE go_memstats_next_gc_bytes gauge
+go_memstats_next_gc_bytes 4.194304e+06
+# HELP go_memstats_other_sys_bytes Number of bytes used for other system allocations. Equals to /memory/classes/other:bytes.
+# TYPE go_memstats_other_sys_bytes gauge
+go_memstats_other_sys_bytes 1.076551e+06
+# HELP go_memstats_stack_inuse_bytes Number of bytes obtained from system for stack allocator in non-CGO environments. Equals to /memory/classes/heap/stacks:bytes.
+# TYPE go_memstats_stack_inuse_bytes gauge
+go_memstats_stack_inuse_bytes 688128
+# HELP go_memstats_stack_sys_bytes Number of bytes obtained from system for stack allocator. Equals to /memory/classes/heap/stacks:bytes + /memory/classes/os-stacks:bytes.
+# TYPE go_memstats_stack_sys_bytes gauge
+go_memstats_stack_sys_bytes 688128
+# HELP go_memstats_sys_bytes Number of bytes obtained from system. Equals to /memory/classes/total:byte.
+# TYPE go_memstats_sys_bytes gauge
+go_memstats_sys_bytes 1.2609816e+07
+# HELP go_sched_gomaxprocs_threads The current runtime.GOMAXPROCS setting, or the number of operating system threads that can execute user-level Go code simultaneously. Sourced from /sched/gomaxprocs:threads.
+# TYPE go_sched_gomaxprocs_threads gauge
+go_sched_gomaxprocs_threads 12
+# HELP go_threads Number of OS threads created.
+# TYPE go_threads gauge
+go_threads 9
+# HELP nvidia_gpu_exporter_build_info A metric with a constant '1' value labeled by version, revision, branch, goversion from which nvidia_gpu_exporter was built, and the goos and goarch for the build.
+# TYPE nvidia_gpu_exporter_build_info gauge
+nvidia_gpu_exporter_build_info{branch="HEAD",goarch="amd64",goos="linux",goversion="go1.27.1",revision="87afc069c5ce6a37b13db58989ec0f30d9b87217",tags="unknown",version="1.15.1"} 1
+# HELP nvidia_smi_accounting_buffer_size accounting.buffer_size
+# TYPE nvidia_smi_accounting_buffer_size gauge
+nvidia_smi_accounting_buffer_size{uuid="00000000-1111-2222-3333-444444444444"} 4000
+# HELP nvidia_smi_accounting_mode accounting.mode
+# TYPE nvidia_smi_accounting_mode gauge
+nvidia_smi_accounting_mode{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_current_graphics_clock_hz clocks.current.graphics [MHz]
+# TYPE nvidia_smi_clocks_current_graphics_clock_hz gauge
+nvidia_smi_clocks_current_graphics_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 3.6e+08
+# HELP nvidia_smi_clocks_current_memory_clock_hz clocks.current.memory [MHz]
+# TYPE nvidia_smi_clocks_current_memory_clock_hz gauge
+nvidia_smi_clocks_current_memory_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 4.05e+08
+# HELP nvidia_smi_clocks_current_sm_clock_hz clocks.current.sm [MHz]
+# TYPE nvidia_smi_clocks_current_sm_clock_hz gauge
+nvidia_smi_clocks_current_sm_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 3.6e+08
+# HELP nvidia_smi_clocks_current_video_clock_hz clocks.current.video [MHz]
+# TYPE nvidia_smi_clocks_current_video_clock_hz gauge
+nvidia_smi_clocks_current_video_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 5.4e+08
+# HELP nvidia_smi_clocks_event_reasons_active clocks_event_reasons.active
+# TYPE nvidia_smi_clocks_event_reasons_active gauge
+nvidia_smi_clocks_event_reasons_active{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_clocks_event_reasons_applications_clocks_setting clocks_event_reasons.applications_clocks_setting
+# TYPE nvidia_smi_clocks_event_reasons_applications_clocks_setting gauge
+nvidia_smi_clocks_event_reasons_applications_clocks_setting{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_gpu_idle clocks_event_reasons.gpu_idle
+# TYPE nvidia_smi_clocks_event_reasons_gpu_idle gauge
+nvidia_smi_clocks_event_reasons_gpu_idle{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_clocks_event_reasons_hw_power_brake_slowdown clocks_event_reasons.hw_power_brake_slowdown
+# TYPE nvidia_smi_clocks_event_reasons_hw_power_brake_slowdown gauge
+nvidia_smi_clocks_event_reasons_hw_power_brake_slowdown{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_hw_slowdown clocks_event_reasons.hw_slowdown
+# TYPE nvidia_smi_clocks_event_reasons_hw_slowdown gauge
+nvidia_smi_clocks_event_reasons_hw_slowdown{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_hw_thermal_slowdown clocks_event_reasons.hw_thermal_slowdown
+# TYPE nvidia_smi_clocks_event_reasons_hw_thermal_slowdown gauge
+nvidia_smi_clocks_event_reasons_hw_thermal_slowdown{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_supported clocks_event_reasons.supported
+# TYPE nvidia_smi_clocks_event_reasons_supported gauge
+nvidia_smi_clocks_event_reasons_supported{uuid="00000000-1111-2222-3333-444444444444"} 511
+# HELP nvidia_smi_clocks_event_reasons_sw_power_cap clocks_event_reasons.sw_power_cap
+# TYPE nvidia_smi_clocks_event_reasons_sw_power_cap gauge
+nvidia_smi_clocks_event_reasons_sw_power_cap{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_sw_thermal_slowdown clocks_event_reasons.sw_thermal_slowdown
+# TYPE nvidia_smi_clocks_event_reasons_sw_thermal_slowdown gauge
+nvidia_smi_clocks_event_reasons_sw_thermal_slowdown{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_event_reasons_sync_boost clocks_event_reasons.sync_boost
+# TYPE nvidia_smi_clocks_event_reasons_sync_boost gauge
+nvidia_smi_clocks_event_reasons_sync_boost{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_clocks_max_graphics_clock_hz clocks.max.graphics [MHz]
+# TYPE nvidia_smi_clocks_max_graphics_clock_hz gauge
+nvidia_smi_clocks_max_graphics_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 2.28e+09
+# HELP nvidia_smi_clocks_max_memory_clock_hz clocks.max.memory [MHz]
+# TYPE nvidia_smi_clocks_max_memory_clock_hz gauge
+nvidia_smi_clocks_max_memory_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 7.001e+09
+# HELP nvidia_smi_clocks_max_sm_clock_hz clocks.max.sm [MHz]
+# TYPE nvidia_smi_clocks_max_sm_clock_hz gauge
+nvidia_smi_clocks_max_sm_clock_hz{uuid="00000000-1111-2222-3333-444444444444"} 2.28e+09
+# HELP nvidia_smi_command_exit_code Exit code of the most recent nvidia-smi run
+# TYPE nvidia_smi_command_exit_code gauge
+nvidia_smi_command_exit_code 0
+# HELP nvidia_smi_compute_cap compute_cap
+# TYPE nvidia_smi_compute_cap gauge
+nvidia_smi_compute_cap{uuid="00000000-1111-2222-3333-444444444444"} 7.5
+# HELP nvidia_smi_compute_mode compute_mode
+# TYPE nvidia_smi_compute_mode gauge
+nvidia_smi_compute_mode{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_count count
+# TYPE nvidia_smi_count gauge
+nvidia_smi_count{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_display_active display_active
+# TYPE nvidia_smi_display_active gauge
+nvidia_smi_display_active{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_display_mode display_mode
+# TYPE nvidia_smi_display_mode gauge
+nvidia_smi_display_mode{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_driver_version driver_version
+# TYPE nvidia_smi_driver_version gauge
+nvidia_smi_driver_version{uuid="00000000-1111-2222-3333-444444444444"} 560.94
+# HELP nvidia_smi_encoder_stats_average_fps encoder.stats.averageFps
+# TYPE nvidia_smi_encoder_stats_average_fps gauge
+nvidia_smi_encoder_stats_average_fps{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_encoder_stats_average_latency encoder.stats.averageLatency
+# TYPE nvidia_smi_encoder_stats_average_latency gauge
+nvidia_smi_encoder_stats_average_latency{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_encoder_stats_session_count encoder.stats.sessionCount
+# TYPE nvidia_smi_encoder_stats_session_count gauge
+nvidia_smi_encoder_stats_session_count{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_enforced_power_limit_watts enforced.power.limit [W]
+# TYPE nvidia_smi_enforced_power_limit_watts gauge
+nvidia_smi_enforced_power_limit_watts{uuid="00000000-1111-2222-3333-444444444444"} 170
+# HELP nvidia_smi_failed_scrapes_total Number of failed collections
+# TYPE nvidia_smi_failed_scrapes_total counter
+nvidia_smi_failed_scrapes_total 0
+# HELP nvidia_smi_fan_speed_ratio fan.speed [%]
+# TYPE nvidia_smi_fan_speed_ratio gauge
+nvidia_smi_fan_speed_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_gpu_info A metric with a constant '1' value labeled by gpu uuid, name, driver_model_current, driver_model_pending, vbios_version, driver_version, pci_bus_id, serial, compute_cap, pci_sub_device_id, index, cuda_version.
+# TYPE nvidia_smi_gpu_info gauge
+nvidia_smi_gpu_info{compute_cap="7.5",cuda_version="12.6",driver_model_current="WDDM",driver_model_pending="WDDM",driver_version="560.94",index="0",name="NVIDIA GeForce RTX 2060",pci_bus_id="00000000:08:00.0",pci_sub_device_id="0x3FC11458",serial="[N/A]",uuid="00000000-1111-2222-3333-444444444444",vbios_version="90.04.63.40.2b"} 1
+# HELP nvidia_smi_index index
+# TYPE nvidia_smi_index gauge
+nvidia_smi_index{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_inforom_oem inforom.oem
+# TYPE nvidia_smi_inforom_oem gauge
+nvidia_smi_inforom_oem{uuid="00000000-1111-2222-3333-444444444444"} 1.1
+# HELP nvidia_smi_last_collect_duration_seconds Duration of the most recent collection
+# TYPE nvidia_smi_last_collect_duration_seconds gauge
+nvidia_smi_last_collect_duration_seconds 0.071968699
+# HELP nvidia_smi_last_collect_success Whether the most recent collection succeeded (1) or not (0)
+# TYPE nvidia_smi_last_collect_success gauge
+nvidia_smi_last_collect_success 1
+# HELP nvidia_smi_last_collect_success_timestamp_seconds Unix timestamp of the most recent successful collection
+# TYPE nvidia_smi_last_collect_success_timestamp_seconds gauge
+nvidia_smi_last_collect_success_timestamp_seconds 1.791927387e+09
+# HELP nvidia_smi_memory_free_bytes memory.free [MiB]
+# TYPE nvidia_smi_memory_free_bytes gauge
+nvidia_smi_memory_free_bytes{uuid="00000000-1111-2222-3333-444444444444"} 2.58473984e+09
+# HELP nvidia_smi_memory_reserved_bytes memory.reserved [MiB]
+# TYPE nvidia_smi_memory_reserved_bytes gauge
+nvidia_smi_memory_reserved_bytes{uuid="00000000-1111-2222-3333-444444444444"} 2.08666624e+08
+# HELP nvidia_smi_memory_total_bytes memory.total [MiB]
+# TYPE nvidia_smi_memory_total_bytes gauge
+nvidia_smi_memory_total_bytes{uuid="00000000-1111-2222-3333-444444444444"} 6.442450944e+09
+# HELP nvidia_smi_memory_used_bytes memory.used [MiB]
+# TYPE nvidia_smi_memory_used_bytes gauge
+nvidia_smi_memory_used_bytes{uuid="00000000-1111-2222-3333-444444444444"} 3.650093056e+09
+# HELP nvidia_smi_name name
+# TYPE nvidia_smi_name gauge
+nvidia_smi_name{uuid="00000000-1111-2222-3333-444444444444"} 2060
+# HELP nvidia_smi_pci_bus pci.bus
+# TYPE nvidia_smi_pci_bus gauge
+nvidia_smi_pci_bus{uuid="00000000-1111-2222-3333-444444444444"} 8
+# HELP nvidia_smi_pci_device pci.device
+# TYPE nvidia_smi_pci_device gauge
+nvidia_smi_pci_device{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_pci_device_id pci.device_id
+# TYPE nvidia_smi_pci_device_id gauge
+nvidia_smi_pci_device_id{uuid="00000000-1111-2222-3333-444444444444"} 5.1229923e+08
+# HELP nvidia_smi_pci_domain pci.domain
+# TYPE nvidia_smi_pci_domain gauge
+nvidia_smi_pci_domain{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_pci_sub_device_id pci.sub_device_id
+# TYPE nvidia_smi_pci_sub_device_id gauge
+nvidia_smi_pci_sub_device_id{uuid="00000000-1111-2222-3333-444444444444"} 1.069618264e+09
+# HELP nvidia_smi_pcie_link_gen_current pcie.link.gen.current
+# TYPE nvidia_smi_pcie_link_gen_current gauge
+nvidia_smi_pcie_link_gen_current{uuid="00000000-1111-2222-3333-444444444444"} 3
+# HELP nvidia_smi_pcie_link_gen_gpucurrent pcie.link.gen.gpucurrent
+# TYPE nvidia_smi_pcie_link_gen_gpucurrent gauge
+nvidia_smi_pcie_link_gen_gpucurrent{uuid="00000000-1111-2222-3333-444444444444"} 3
+# HELP nvidia_smi_pcie_link_gen_gpumax pcie.link.gen.gpumax
+# TYPE nvidia_smi_pcie_link_gen_gpumax gauge
+nvidia_smi_pcie_link_gen_gpumax{uuid="00000000-1111-2222-3333-444444444444"} 3
+# HELP nvidia_smi_pcie_link_gen_hostmax pcie.link.gen.hostmax
+# TYPE nvidia_smi_pcie_link_gen_hostmax gauge
+nvidia_smi_pcie_link_gen_hostmax{uuid="00000000-1111-2222-3333-444444444444"} 3
+# HELP nvidia_smi_pcie_link_gen_max pcie.link.gen.max
+# TYPE nvidia_smi_pcie_link_gen_max gauge
+nvidia_smi_pcie_link_gen_max{uuid="00000000-1111-2222-3333-444444444444"} 3
+# HELP nvidia_smi_pcie_link_width_current pcie.link.width.current
+# TYPE nvidia_smi_pcie_link_width_current gauge
+nvidia_smi_pcie_link_width_current{uuid="00000000-1111-2222-3333-444444444444"} 16
+# HELP nvidia_smi_pcie_link_width_max pcie.link.width.max
+# TYPE nvidia_smi_pcie_link_width_max gauge
+nvidia_smi_pcie_link_width_max{uuid="00000000-1111-2222-3333-444444444444"} 16
+# HELP nvidia_smi_persistence_mode persistence_mode
+# TYPE nvidia_smi_persistence_mode gauge
+nvidia_smi_persistence_mode{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_power_default_limit_watts power.default_limit [W]
+# TYPE nvidia_smi_power_default_limit_watts gauge
+nvidia_smi_power_default_limit_watts{uuid="00000000-1111-2222-3333-444444444444"} 170
+# HELP nvidia_smi_power_draw_instant_watts power.draw.instant [W]
+# TYPE nvidia_smi_power_draw_instant_watts gauge
+nvidia_smi_power_draw_instant_watts{uuid="00000000-1111-2222-3333-444444444444"} 21.99
+# HELP nvidia_smi_power_draw_watts power.draw [W]
+# TYPE nvidia_smi_power_draw_watts gauge
+nvidia_smi_power_draw_watts{uuid="00000000-1111-2222-3333-444444444444"} 21.99
+# HELP nvidia_smi_power_limit_watts power.limit [W]
+# TYPE nvidia_smi_power_limit_watts gauge
+nvidia_smi_power_limit_watts{uuid="00000000-1111-2222-3333-444444444444"} 170
+# HELP nvidia_smi_power_management power.management
+# TYPE nvidia_smi_power_management gauge
+nvidia_smi_power_management{uuid="00000000-1111-2222-3333-444444444444"} 1
+# HELP nvidia_smi_power_max_limit_watts power.max_limit [W]
+# TYPE nvidia_smi_power_max_limit_watts gauge
+nvidia_smi_power_max_limit_watts{uuid="00000000-1111-2222-3333-444444444444"} 200
+# HELP nvidia_smi_power_min_limit_watts power.min_limit [W]
+# TYPE nvidia_smi_power_min_limit_watts gauge
+nvidia_smi_power_min_limit_watts{uuid="00000000-1111-2222-3333-444444444444"} 125
+# HELP nvidia_smi_pstate pstate
+# TYPE nvidia_smi_pstate gauge
+nvidia_smi_pstate{uuid="00000000-1111-2222-3333-444444444444"} 8
+# HELP nvidia_smi_reset_status_reset_required reset_status.reset_required
+# TYPE nvidia_smi_reset_status_reset_required gauge
+nvidia_smi_reset_status_reset_required{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_temperature_gpu temperature.gpu
+# TYPE nvidia_smi_temperature_gpu gauge
+nvidia_smi_temperature_gpu{uuid="00000000-1111-2222-3333-444444444444"} 50
+# HELP nvidia_smi_utilization_decoder_ratio utilization.decoder [%]
+# TYPE nvidia_smi_utilization_decoder_ratio gauge
+nvidia_smi_utilization_decoder_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_utilization_encoder_ratio utilization.encoder [%]
+# TYPE nvidia_smi_utilization_encoder_ratio gauge
+nvidia_smi_utilization_encoder_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_utilization_gpu_ratio utilization.gpu [%]
+# TYPE nvidia_smi_utilization_gpu_ratio gauge
+nvidia_smi_utilization_gpu_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_utilization_jpeg_ratio utilization.jpeg [%]
+# TYPE nvidia_smi_utilization_jpeg_ratio gauge
+nvidia_smi_utilization_jpeg_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_utilization_memory_ratio utilization.memory [%]
+# TYPE nvidia_smi_utilization_memory_ratio gauge
+nvidia_smi_utilization_memory_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP nvidia_smi_utilization_ofa_ratio utilization.ofa [%]
+# TYPE nvidia_smi_utilization_ofa_ratio gauge
+nvidia_smi_utilization_ofa_ratio{uuid="00000000-1111-2222-3333-444444444444"} 0
+# HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 0.04
+# HELP process_max_fds Maximum number of open file descriptors.
+# TYPE process_max_fds gauge
+process_max_fds 1.048576e+06
+# HELP process_network_receive_bytes_total Number of bytes received by the process over the network.
+# TYPE process_network_receive_bytes_total counter
+process_network_receive_bytes_total 249
+# HELP process_network_transmit_bytes_total Number of bytes sent by the process over the network.
+# TYPE process_network_transmit_bytes_total counter
+process_network_transmit_bytes_total 112
+# HELP process_open_fds Number of open file descriptors.
+# TYPE process_open_fds gauge
+process_open_fds 8
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 1.4237696e+07
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds 1.7919273854e+09
+# HELP process_virtual_memory_bytes Virtual memory size in bytes.
+# TYPE process_virtual_memory_bytes gauge
+process_virtual_memory_bytes 1.370599424e+09
+# HELP process_virtual_memory_max_bytes Maximum amount of virtual memory available in bytes.
+# TYPE process_virtual_memory_max_bytes gauge
+process_virtual_memory_max_bytes 1.8446744073709552e+19
+# HELP promhttp_metric_handler_errors_total Total number of internal errors encountered by the promhttp metric handler.
+# TYPE promhttp_metric_handler_errors_total counter
+promhttp_metric_handler_errors_total{cause="encoding"} 0
+promhttp_metric_handler_errors_total{cause="gathering"} 0
+# HELP promhttp_metric_handler_requests_in_flight Current number of scrapes being served.
+# TYPE promhttp_metric_handler_requests_in_flight gauge
+promhttp_metric_handler_requests_in_flight 1
+# HELP promhttp_metric_handler_requests_total Total number of scrapes by HTTP status code.
+# TYPE promhttp_metric_handler_requests_total counter
+promhttp_metric_handler_requests_total{code="200"} 0
+promhttp_metric_handler_requests_total{code="500"} 0
+promhttp_metric_handler_requests_total{code="503"} 0
