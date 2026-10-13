@@ -9,3 +9,6 @@ deploy/config.yaml
 __pycache__/
 .pytest_cache/
 *.egg-info/
+
+# Reports written by `ico report`
+/report*.html

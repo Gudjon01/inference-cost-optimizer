@@ -50,7 +50,8 @@ class ClickHouse:
     host: str = "localhost"
     port: int = 8123
     username: str = "default"
-    password: str = ""
+    # Kept out of the repr so it cannot end up in a log line or a test failure.
+    password: str = field(default="", repr=False)
     database: str = "ico"
     secure: bool = False
 
@@ -108,6 +109,12 @@ def parse(raw: dict[str, Any]) -> Config:
     # The password stays out of the file when the environment provides it.
     if password := os.environ.get("ICO_CLICKHOUSE_PASSWORD"):
         clickhouse = replace(clickhouse, password=password)
+    # The file names ClickHouse as the collector reaches it. The CLI run from
+    # somewhere else, say the host outside Compose, can point elsewhere.
+    if host := os.environ.get("ICO_CLICKHOUSE_HOST"):
+        clickhouse = replace(clickhouse, host=host)
+    if port := os.environ.get("ICO_CLICKHOUSE_PORT"):
+        clickhouse = replace(clickhouse, port=int(port))
 
     return Config(
         replicas=replicas,
