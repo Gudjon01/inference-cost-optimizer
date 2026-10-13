@@ -1,0 +1,132 @@
+# The whole install: gateway, collector and ClickHouse. Run from this directory.
+#
+#   docker compose up -d                      core services
+#   docker compose --profile vllm up -d       + a vLLM replica on this host's GPU
+#   docker compose --profile dcgm up -d       + NVIDIA's exporter, datacenter GPUs
+#   docker compose --profile geforce up -d    + nvidia-smi exporter, GeForce GPUs
+#   docker compose --profile mock up -d       + two fake engines, no GPU needed
+#
+# The engine and the exporters are other people's containers. Ours never
+# touch a GPU driver.
+
+name: ico
+
+x-config: &config
+  type: bind
+  source: ${ICO_CONFIG_FILE:-./config.yaml}
+  target: /etc/ico/config.yaml
+  read_only: true
+
+x-gpu: &gpu
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+
+services:
+  gateway:
+    build: ../gateway
+    image: ico/gateway:dev
+    environment:
+      ICO_ADMIN_TOKEN: ${ICO_ADMIN_TOKEN:?set ICO_ADMIN_TOKEN in deploy/.env}
+    volumes:
+      - *config
+      - gateway-state:/var/lib/ico
+    ports:
+      - "8080:8080"
+      # The admin API can drain replicas; keep it off public interfaces.
+      - "127.0.0.1:8081:8081"
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ..
+      dockerfile: py/Dockerfile
+    environment:
+      ICO_CLICKHOUSE_PASSWORD: ${ICO_CLICKHOUSE_PASSWORD:?set ICO_CLICKHOUSE_PASSWORD in deploy/.env}
+    volumes:
+      - *config
+    ports:
+      # Engines on other hosts send their traces here: bind it to an address
+      # they can reach, on a network you trust. It takes writes without auth.
+      - "127.0.0.1:4317:4317"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8
+    environment:
+      CLICKHOUSE_DB: ico
+      CLICKHOUSE_USER: ico
+      CLICKHOUSE_PASSWORD: ${ICO_CLICKHOUSE_PASSWORD:?set ICO_CLICKHOUSE_PASSWORD in deploy/.env}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user \"$$CLICKHOUSE_USER\" --password \"$$CLICKHOUSE_PASSWORD\" --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    ports:
+      - "127.0.0.1:8123:8123"
+    restart: unless-stopped
+
+  vllm:
+    profiles: [vllm]
+    image: ${ICO_VLLM_IMAGE:-vllm/vllm-openai:v0.31.0}
+    # By default the engine sends a span per request to the collector. Setting
+    # ICO_VLLM_ARGS replaces that default, so repeat the flag there to keep it.
+    command: --model ${ICO_VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct} --host 0.0.0.0 --port 8000 ${ICO_VLLM_ARGS:---otlp-traces-endpoint grpc://collector:4317}
+    environment:
+      # Spans are filed under this name: it must be the replica's name in the config.
+      OTEL_SERVICE_NAME: ${ICO_VLLM_REPLICA:-r1}
+      # The collector's port is plain gRPC. Older vLLM builds try TLS unless told.
+      OTEL_EXPORTER_OTLP_TRACES_INSECURE: "true"
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-0}
+    volumes:
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    deploy: *gpu
+    restart: unless-stopped
+
+  dcgm-exporter:
+    profiles: [dcgm]
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.5.2-4.8.1-ubuntu22.04
+    command: ["-f", "/etc/dcgm-exporter/ico-counters.csv"]
+    volumes:
+      - ./dcgm-counters.csv:/etc/dcgm-exporter/ico-counters.csv:ro
+    cap_add:
+      - SYS_ADMIN   # profiling counters need it
+    deploy: *gpu
+    ports:
+      - "127.0.0.1:9400:9400"
+    restart: unless-stopped
+
+  nvidia-gpu-exporter:
+    profiles: [geforce]
+    image: utkuozdemir/nvidia_gpu_exporter:1.15.1
+    deploy: *gpu
+    ports:
+      - "127.0.0.1:9835:9835"
+    restart: unless-stopped
+
+  # The fake engine ships in the gateway image.
+  mockengine-1: &mockengine
+    profiles: [mock]
+    image: ico/gateway:dev
+    entrypoint: ["/usr/local/bin/mockengine"]
+    command: ["-model", "mock-model"]
+
+  mockengine-2: *mockengine
+
+volumes:
+  clickhouse-data:
+  gateway-state:

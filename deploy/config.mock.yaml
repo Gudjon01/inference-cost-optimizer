@@ -1,0 +1,26 @@
+# GPU-free development: two fake engines behind the gateway.
+#   ICO_CONFIG_FILE=./config.mock.yaml docker compose --profile mock up --build
+# See config.example.yaml for what each key means.
+
+replicas:
+  - name: mock-1
+    url: http://mockengine-1:8000
+    host: dev
+    gpu_model: mock
+    gpu_count: 1
+  - name: mock-2
+    url: http://mockengine-2:8000
+    host: dev
+    gpu_model: mock
+    gpu_count: 1
+
+gpu_price_per_hour:
+  mock: 1.00
+
+gateway:
+  collector: collector:4317
+
+clickhouse:
+  host: clickhouse
+  username: ico
+  database: ico
