@@ -1,0 +1,75 @@
+# One file configures the gateway, the collector and the replay lab.
+# Copy it to deploy/config.yaml and edit. Secrets stay out of it: the admin
+# token and the ClickHouse password come from deploy/.env.
+
+# The engine replicas the gateway balances across.
+replicas:
+  - name: r1
+    url: http://vllm:8000
+    host: gpu-1            # the host name the GPU exporter runs on
+    gpu_model: L4
+    gpu_count: 1
+    # models: [Qwen/Qwen2.5-0.5B-Instruct]   # optional: send only these models here
+    # How `ico replay` restarts this engine under other flags. The simplest is
+    # to let it copy the engine's container with other flags:
+    #   launcher:
+    #     kind: docker
+    #     container: ico-vllm-1
+    # Or it runs commands of yours on the machine the CLI runs on, with {flags}
+    # filled in, as below. Without a launcher the CLI prints the flags and
+    # waits for you to restart the engine by hand.
+    launcher:
+      kind: command
+      start: docker compose --profile vllm up -d vllm
+      stop: docker compose --profile vllm stop vllm
+      env:
+        ICO_VLLM_ARGS: "--otlp-traces-endpoint grpc://collector:4317 {flags}"
+      # The flags in production today. Every replay ends by restoring them.
+      flags:
+        gpu-memory-utilization: 0.9
+
+# USD per GPU-hour, by gpu_model. Idle hours are billed too.
+gpu_price_per_hour:
+  L4: 0.50
+
+# What MFU and MBU need to know about each served model.
+models:
+  Qwen/Qwen2.5-0.5B-Instruct:
+    params: 494_000_000
+    weight_bytes_per_param: 2      # FP16
+    kv_bytes_per_token: 12_288     # 2 x layers(24) x kv_heads(2) x head_dim(64) x 2 bytes
+
+# Request headers that name who and what a request is for.
+headers:
+  tenant: X-Tenant-Id
+  feature: X-Feature
+
+# Latency limits a config must hold to count as valid in a replay.
+slo:
+  ttft_p95_ms: 500
+  itl_p95_ms: 50
+
+gateway:
+  listen: ":8080"
+  admin_listen: ":8081"
+  admin_url: http://localhost:8081   # where the CLI reaches the admin API
+  collector: collector:4317
+  # Request text is hashed in blocks of this many characters, up to max_blocks,
+  # to find shared prefixes. The text itself is never stored.
+  prefix_hash:
+    block_chars: 256
+    max_blocks: 64
+
+collector:
+  grpc_listen: 0.0.0.0:4317     # gateway records and engine OTLP traces
+  scrape_interval_s: 5          # engine /metrics and GPU exporters
+  gpu_exporters:
+    - kind: dcgm                # NVIDIA datacenter cards. GeForce: kind nvidia_smi,
+      url: http://dcgm-exporter:9400/metrics   # url http://nvidia-gpu-exporter:9835/metrics
+      host: gpu-1
+
+clickhouse:
+  host: clickhouse
+  port: 8123
+  username: ico
+  database: ico

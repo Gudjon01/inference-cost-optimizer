@@ -1,0 +1,18 @@
+# A sweep file for `ico replay`: the engine configs to test against recorded traffic.
+#
+# Each config is the replica's current flags (launcher.flags in the config
+# file) with some of them changed. Flags are written as vLLM takes them,
+# without the leading dashes; true and false stand for --flag and --no-flag,
+# and null removes a flag.
+
+# Configs listed one by one.
+configs:
+  - gpu-memory-utilization: 0.95
+  - enable-prefix-caching: false
+  # Changing precision is measured but cannot win until answer quality is checked.
+  - quantization: fp8
+
+# Every combination of these values, on top of the list above.
+grid:
+  max-num-seqs: [64, 128, 512]
+  max-num-batched-tokens: [8192, 16384]

@@ -1,0 +1,8 @@
+# The repo root is the build context of the collector image only.
+.git
+gateway
+docs
+deploy
+**/.venv
+**/__pycache__
+**/.pytest_cache

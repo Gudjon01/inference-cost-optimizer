@@ -1,0 +1,13 @@
+# Counters dcgm-exporter publishes for the collector.
+# Format: DCGM field, Prometheus metric type, help text.
+# The DCGM_FI_PROF_* fields are profiling counters: datacenter GPUs only, and
+# the exporter needs the SYS_ADMIN capability to read them.
+
+DCGM_FI_PROF_SM_ACTIVE,          gauge, Ratio of time the compute cores had work assigned.
+DCGM_FI_PROF_SM_OCCUPANCY,       gauge, Ratio of compute core slots in use.
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, Ratio of time the tensor cores were active.
+DCGM_FI_PROF_DRAM_ACTIVE,        gauge, Ratio of time the memory interface was reading or writing.
+DCGM_FI_DEV_FB_USED,             gauge, Framebuffer memory used (in MiB).
+DCGM_FI_DEV_FB_TOTAL,            gauge, Framebuffer memory in total (in MiB).
+DCGM_FI_DEV_POWER_USAGE,         gauge, Power draw (in W).
+DCGM_FI_DEV_GPU_UTIL,            gauge, GPU utilization as nvidia-smi reports it (in %).

@@ -1,0 +1,40 @@
+[project]
+name = "ico"
+version = "0.1.0"
+description = "Collector, analyzer, replay lab and CLI of the self-hosted inference cost optimizer"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    "click>=8.1",
+    "clickhouse-connect>=0.8",
+    "docker>=7.2.0",
+    # Floors match the versions that generated src/ico/telemetry; the generated
+    # code refuses to load on anything older.
+    "grpcio>=1.84.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "opentelemetry-proto>=1.45.1",
+    "prometheus-client>=0.26.0",
+    "protobuf>=7.35.1",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+ico = "ico.cli:main"
+
+[dependency-groups]
+dev = [
+    "grpcio-tools==1.84.0",
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ico"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["clickhouse: needs a ClickHouse server, set ICO_TEST_CLICKHOUSE_HOST to run"]

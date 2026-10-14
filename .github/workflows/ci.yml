@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.sum
+      - run: go vet ./...
+      - run: test -z "$(gofmt -l .)"
+      - run: go test -race ./...
+
+  python:
+    runs-on: ubuntu-latest
+    # Some tests write to a real ClickHouse. This one lives as long as the job.
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.8
+        env:
+          CLICKHOUSE_USER: ico
+          CLICKHOUSE_PASSWORD: ci-only
+          CLICKHOUSE_DB: ico
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "clickhouse-client --user ico --password ci-only --query 'SELECT 1'"
+          --health-interval 5s
+          --health-retries 24
+    defaults:
+      run:
+        working-directory: py
+    env:
+      ICO_TEST_CLICKHOUSE_HOST: localhost
+      ICO_TEST_CLICKHOUSE_USER: ico
+      ICO_TEST_CLICKHOUSE_PASSWORD: ci-only
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run pytest -q

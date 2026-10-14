@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package ico.telemetry.v1;
+
+option go_package = "github.com/Gudjon01/inference-cost-optimizer/gateway/internal/telemetrypb";
+
+// Telemetry is served by the collector. The gateway is its only client.
+service Telemetry {
+  // Export delivers a batch of finished requests. The gateway never blocks a
+  // client request on this call: when it fails the batch is retried or dropped.
+  rpc Export(ExportRequest) returns (ExportResponse);
+}
+
+message ExportRequest {
+  // Name of the gateway instance that produced the batch.
+  string gateway_id = 1;
+  repeated RequestRecord records = 2;
+}
+
+message ExportResponse {
+  uint32 accepted = 1;
+}
+
+// RequestRecord is one proxied request. It carries timings, token counts and
+// salted prefix hashes, never prompt or completion text.
+message RequestRecord {
+  string request_id = 1;
+  // W3C trace id, 32 lowercase hex characters. Joins the engine's spans.
+  string trace_id = 2;
+  // When the gateway received the request, Unix epoch nanoseconds.
+  int64 arrival_unix_nanos = 3;
+  string replica = 4;
+  string model = 5;
+  string tenant = 6;
+  string feature = 7;
+  // chat, completions or embeddings.
+  string endpoint = 8;
+
+  uint32 prompt_tokens = 9;
+  uint32 completion_tokens = 10;
+  // Prompt tokens the engine served from its prefix cache, when it reports them.
+  uint32 cached_tokens = 11;
+
+  // Time to the first content chunk. Zero for non-streaming requests.
+  float ttft_ms = 12;
+  float e2e_ms = 13;
+  // Gaps between consecutive content chunks of a streaming response.
+  float gap_p50_ms = 14;
+  float gap_p95_ms = 15;
+
+  // HTTP status sent to the client. 499 when the client went away first.
+  uint32 status = 16;
+  bool stream = 17;
+  uint32 max_tokens = 18;
+
+  // Characters of request text the hashes were computed over.
+  uint32 prompt_chars = 19;
+  // prefix_hashes[i] identifies the first (i+1) blocks of the request text, so
+  // two requests share a prefix of n blocks when their first n hashes match.
+  repeated fixed64 prefix_hashes = 20;
+}
