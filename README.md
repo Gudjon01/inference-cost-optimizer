@@ -1,31 +1,65 @@
 # inference-cost-optimizer
 
-A self-hosted cost optimizer for teams that serve their own LLMs. A gateway
-records every request, a collector maps engine and GPU data into ClickHouse,
-and a replay lab finds the cheaper setup on the team's own traffic.
+Find out what your self-hosted LLMs cost per million tokens, how much of that
+pays for idle GPUs, and which engine config serves the same traffic for less,
+tested on a replay of your own traffic, on your own machines.
 
-`ico` is a codename until the product has a name.
+**From a real run.** An RTX 2060 serves Qwen3-0.6B on vLLM, capped at
+`--max-num-seqs 8`. `ico replay` took five minutes of traffic the gateway had
+recorded, rebuilt it as synthetic prompts of the same shape, and tested the
+current config and three others in 19 minutes:
+
+| Config | Requests/s within the limits | Per million tokens |
+| --- | ---: | ---: |
+| `--max-num-seqs 8`, the starting config | 2.56 | $0.0218 |
+| `--max-num-seqs 16` | 10.69 | $0.0052 |
+| `--max-num-seqs 256`, vLLM's default | 12.18 | $0.0046 |
+| `--max-num-seqs 64` | 15.12 | $0.0037 |
+
+$0.0218 to $0.0037 per million tokens: 83% less, at the same latency limits
+(p95 time to first token under 1 s, p95 gap between tokens under 50 ms). The
+starting cap was chosen for this demo; against vLLM's own default, 64 is still
+about 20% cheaper on this traffic. Costs assume $0.10 per GPU-hour, and the
+ratios do not depend on the price.
+
+`ico` is a codename until the project has a name.
+
+## What it does
+
+- **Gateway** (Go): an OpenAI-compatible pass-through in front of your engine
+  replicas. It writes one record per request, with token counts, latency,
+  tenant, feature and salted prefix hashes, and never the prompt or the
+  completion. It adds about 0.2 ms at p50. When its collector is down it keeps
+  serving and drops telemetry, never requests.
+- **Collector** (Python): puts the gateway's records, the engine's metrics and
+  traces, and the GPU exporters' counters into ClickHouse.
+- **Report** (`ico report`): cost per million tokens, the share of GPU cost
+  that paid for idle time, cost per model and per tenant, and the latest
+  replay, as one static HTML file.
+- **Replay lab** (`ico replay`): restarts the engine under each candidate
+  config on a drained replica, raises your recorded traffic shape until a
+  latency limit breaks, and names the cheapest config that holds. It puts the
+  original back whatever happens.
+
+All of it runs inside your network, and no text leaves it: the replay's
+prompts are synthetic, rebuilt from token counts and prefix hashes.
 
 ## Status
 
-| Build step | State |
-| --- | --- |
-| 1. Compose, ClickHouse schema, vLLM and GPU exporter services | Done |
-| 2. Gateway: pass-through, streaming, records, gRPC export | Done |
-| 3. Collector: gateway ingest, vLLM and GPU scrapers, OTLP receiver, trace-id join | Done |
-| 4. Analyzer views and `ico report` | Done |
-| 5. Replay lab: sampling, rate ramp, time budget, safety, launchers, successive halving | Done |
-| 6. README with a real before-and-after number, open-source launch | Next |
-
-Checked against real hardware so far: vLLM 0.10.1.1 on a GeForce RTX 2060 with
-nvidia_gpu_exporter 1.15.1. Still to check on a rented datacenter GPU:
+Works today with vLLM on NVIDIA GPUs, deployed with Docker Compose. It has run
+on real hardware only on a GeForce RTX 2060, with vLLM 0.10.1.1 and
+nvidia_gpu_exporter 1.15.1. Still to check on a datacenter GPU:
 
 - dcgm-exporter. Its adapter is tested against a hand-written page
   (`py/tests/fixtures/dcgm-exporter.handwritten.metrics.txt`), not a real one.
 - A current vLLM. Its metric names were read from the v0.31.0 source, not a
   running server.
 - Prefill and decode time in engine spans. vLLM 0.10.1.1 leaves them out, so
-  `prefill_ms` and `decode_ms` read 0 there.
+  the tenant split falls back to token counts there.
+
+Not built yet: SGLang and AMD adapters, Kubernetes and Helm, live-mirror
+replay, and a check of answer quality. Until that check exists, configs that
+change precision, such as FP8, are measured but cannot win.
 
 ## Layout
 
@@ -249,3 +283,7 @@ Compose stack up, set `ICO_TEST_CLICKHOUSE_HOST=localhost`,
 After editing `proto/`, regenerate both sides with `scripts/gen-proto.sh`.
 Migrations in `schema/` are applied once and recorded by file name: add a new
 numbered file, never edit one that has shipped.
+
+## License
+
+Apache 2.0. See `LICENSE`.
