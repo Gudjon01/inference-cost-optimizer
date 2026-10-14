@@ -55,6 +55,7 @@ _DCGM = _Mapping(
         "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": ("tensor_active_ratio", 1.0),
         "DCGM_FI_PROF_DRAM_ACTIVE": ("dram_active_ratio", 1.0),
         "DCGM_FI_DEV_FB_USED": ("memory_used_bytes", _MIB),
+        "DCGM_FI_DEV_FB_TOTAL": ("memory_total_bytes", _MIB),
         "DCGM_FI_DEV_POWER_USAGE": ("power_watts", 1.0),
         "DCGM_FI_DEV_GPU_UTIL": ("util_ratio", 0.01),
     },
@@ -66,6 +67,7 @@ _NVIDIA_SMI = _Mapping(
     metrics={
         "nvidia_smi_utilization_gpu_ratio": ("util_ratio", 1.0),
         "nvidia_smi_memory_used_bytes": ("memory_used_bytes", 1.0),
+        "nvidia_smi_memory_total_bytes": ("memory_total_bytes", 1.0),
         "nvidia_smi_power_draw_watts": ("power_watts", 1.0),
     },
     uuid_label="uuid",

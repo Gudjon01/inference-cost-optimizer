@@ -132,7 +132,7 @@ def test_nvidia_smi_exporter_on_a_real_geforce_card_is_level_2():
         "nvidia_smi", "desktop", "http://exporter:9835/metrics", serving(page("nvidia_gpu_exporter-1.15.1.metrics.txt"))
     ))
     assert caps.level == 2
-    assert caps.metrics == {"util_ratio", "memory_used_bytes", "power_watts"}
+    assert caps.metrics == {"util_ratio", "memory_used_bytes", "memory_total_bytes", "power_watts"}
     assert batch.table == "gpu_metrics" and batch.columns == GPU_METRICS_COLUMNS
 
     m = by_metric(batch)
@@ -142,6 +142,7 @@ def test_nvidia_smi_exporter_on_a_real_geforce_card_is_level_2():
     assert used["gpu_uuid"] == "00000000-1111-2222-3333-444444444444"
     assert used["gpu_model"] == "NVIDIA GeForce RTX 2060", "the card's name comes from the exporter's info metric"
     assert m["power_watts"][0]["value"] == 21.99
+    assert m["memory_total_bytes"][0]["value"] == 6 * 2**30, "the roofline check needs the size of the card"
     assert 0.0 <= m["util_ratio"][0]["value"] <= 1.0
 
 
@@ -156,6 +157,7 @@ def test_dcgm_exporter_with_profiling_counters_is_level_3():
     # Units are normalised: percent to a ratio, MiB to bytes.
     assert m["util_ratio"][0]["value"] == pytest.approx(0.97)
     assert m["memory_used_bytes"][0]["value"] == 20480 * 1024 * 1024
+    assert m["memory_total_bytes"][0]["value"] == 23034 * 1024 * 1024
     assert m["power_watts"][0]["value"] == 61.5
     assert {r["gpu_model"] for rows in m.values() for r in rows} == {"NVIDIA L4"}
     assert {r["level"] for rows in m.values() for r in rows} == {3}
