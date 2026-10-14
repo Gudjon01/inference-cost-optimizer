@@ -141,6 +141,7 @@ def test_report_shows_the_latest_replay_with_before_and_after():
     assert "Replay on r1" in page
     assert "gpu-memory-utilization=0.7 serves a million tokens for $0.0072 at full load, 20% below the $0.0090 of the current config." in page
     assert "Replayed 2026-10-14 20:00 UTC on the shape of the traffic recorded 2026-10-14 18:00 to 2026-10-14 19:00." in page
+    assert "A report shows the newest replay of traffic in its window" in page
     assert "passed 500 ms" in page and "passed 50 ms" in page
     assert "Current config 12.40 3,100 $0.0090" in page
     assert "gpu-memory-utilization=0.7 15.50 3,875 $0.0072 Cheapest that holds the limits" in page

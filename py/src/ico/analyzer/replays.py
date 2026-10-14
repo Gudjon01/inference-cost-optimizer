@@ -55,13 +55,22 @@ class ReplayRun:
         return 1 - winner.cost_per_mtok / current.cost_per_mtok
 
 
-def fetch(client: Client, replicas: Sequence[str], until: datetime) -> list[ReplayRun]:
-    """For each replica, its most recent replay that finished by ``until``."""
+def fetch(client: Client, replicas: Sequence[str], since: datetime, until: datetime) -> list[ReplayRun]:
+    """For each replica, the replay a report of since..until shows.
+
+    A replay is built from recorded traffic, so it always finishes after that
+    traffic: the newest finished replay of traffic inside the window is shown,
+    whenever it finished. Failing that, the newest replay that finished by
+    ``until``, as the best knowledge at the window's end. A report never shows
+    a replay of traffic later than its window.
+    """
     runs = client.query(
+        "WITH window_start < {until:DateTime64(3, 'UTC')} AND window_end > {since:DateTime64(3, 'UTC')} AS of_window "
         "SELECT run_id, replica, finished_at, window_start, window_end, slo FROM replay_runs FINAL "
-        "WHERE status = 'finished' AND replica IN {replicas:Array(String)} AND finished_at <= {until:DateTime64(3, 'UTC')} "
-        "ORDER BY finished_at DESC LIMIT 1 BY replica",
-        parameters={"replicas": list(replicas), "until": stamp(until)},
+        "WHERE status = 'finished' AND replica IN {replicas:Array(String)} "
+        "AND (of_window OR finished_at <= {until:DateTime64(3, 'UTC')}) "
+        "ORDER BY of_window DESC, finished_at DESC LIMIT 1 BY replica",
+        parameters={"replicas": list(replicas), "since": stamp(since), "until": stamp(until)},
     ).result_rows
     if not runs:
         return []

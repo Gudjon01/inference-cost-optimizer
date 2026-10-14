@@ -296,7 +296,7 @@
   {% else %}
   <p class="lead">The current config is the cheapest of those tested: {{ run.winner.cost_per_mtok | money }} per million tokens at full load.</p>
   {% endif %}
-  <p class="sub">Replayed {{ run.finished_at | moment }} UTC on the shape of the traffic recorded {{ run.traffic_since | moment }} to {{ run.traffic_until | moment }}. Each config was loaded until time to first token passed {{ run.ttft_p95_ms | round | int }} ms or the gap between tokens passed {{ run.itl_p95_ms | round | int }} ms at the 95th percentile. These costs are at the highest rate a config sustains, so they compare configs with each other; they have no idle time in them and are lower than the cost at the top of this report.</p>
+  <p class="sub">Replayed {{ run.finished_at | moment }} UTC on the shape of the traffic recorded {{ run.traffic_since | moment }} to {{ run.traffic_until | moment }}. A report shows the newest replay of traffic in its window, or, if there is none, the newest that finished by the window's end. Each config was loaded until time to first token passed {{ run.ttft_p95_ms | round | int }} ms or the gap between tokens passed {{ run.itl_p95_ms | round | int }} ms at the 95th percentile. These costs are at the highest rate a config sustains, so they compare configs with each other; they have no idle time in them and are lower than the cost at the top of this report.</p>
   <div class="card">
     <table>
       <thead>
