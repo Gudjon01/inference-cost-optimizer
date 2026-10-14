@@ -64,11 +64,12 @@ the hand-written one.
 Still to check on real hardware: successive halving. On the H100, a full test
 of the configs fit the budget, so the replay never needed it.
 
-Known limit: the replay sends independent requests at a steady rate, so it
-does not build up the long sessions real traffic holds, such as conversations
-and agents resending their history. On the H100 it found the current config
-holding 43 requests/s; the same traffic sent live as sessions was comfortable
-at about 22. Its rates compare configs; they are not capacity to plan by.
+The H100 run also found a bug in the replay. It rebuilt each conversation's own
+history the same on every pass through its sample, so from the second pass on
+nearly every prompt was a prefix-cache hit: 84% by vLLM's count, against
+38-50% on the live traffic. It measured the current config at 43 requests/s,
+where the live traffic was comfortable at about 22 and queued near 28. #5
+fixes it; the replay's H100 numbers need measuring again.
 
 Not built yet: SGLang and AMD adapters, Kubernetes and Helm, live-mirror
 replay, and a check of answer quality. Until that check exists, configs that
