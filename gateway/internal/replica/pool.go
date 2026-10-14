@@ -71,13 +71,15 @@ func (p *Pool) Get(name string) (*Replica, bool) {
 	return r, ok
 }
 
-// SetDrained flips a replica's drain flag and reports whether it exists.
-func (p *Pool) SetDrained(name string, drained bool) (*Replica, bool) {
-	r, ok := p.byName[name]
+// SetDrained sets a replica's drain flag. was is the flag's value before the
+// call: two callers that both drain the same replica can tell from it which
+// of them got there first. ok is false when no replica has that name.
+func (p *Pool) SetDrained(name string, drained bool) (r *Replica, was, ok bool) {
+	r, ok = p.byName[name]
 	if ok {
-		r.drained.Store(drained)
+		was = r.drained.Swap(drained)
 	}
-	return r, ok
+	return r, was, ok
 }
 
 // Acquire returns the next replica in round-robin order that is not drained,

@@ -48,12 +48,17 @@ func Handler(pool *replica.Pool, token string, stats func() any) http.Handler {
 	})
 	setDrained := func(drained bool) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			rep, ok := pool.SetDrained(r.PathValue("name"), drained)
+			rep, was, ok := pool.SetDrained(r.PathValue("name"), drained)
 			if !ok {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "no replica named " + r.PathValue("name")})
 				return
 			}
-			writeJSON(w, http.StatusOK, view(rep))
+			// was_drained lets a caller use the drain flag as a lock: whoever
+			// is told false is the one that drained it.
+			writeJSON(w, http.StatusOK, struct {
+				replicaView
+				WasDrained bool `json:"was_drained"`
+			}{view(rep), was})
 		}
 	}
 	mux.HandleFunc("POST /admin/replicas/{name}/drain", setDrained(true))

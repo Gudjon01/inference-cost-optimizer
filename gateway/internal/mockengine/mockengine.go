@@ -7,9 +7,11 @@ package mockengine
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -23,8 +25,15 @@ type Engine struct {
 	TokenDelay time.Duration
 	// Tokens is how many tokens a request gets when it sets no max_tokens.
 	Tokens int
+	// MaxNumSeqs is how many requests generate at once; the rest wait their
+	// turn, which is what makes an overloaded engine slow to its first
+	// token. Zero means no limit.
+	MaxNumSeqs int
 	// Seen, when set, is called with every inference request and its body.
 	Seen func(r *http.Request, body []byte)
+
+	slots     chan struct{}
+	slotsOnce sync.Once
 
 	running          atomic.Int64
 	requests         atomic.Uint64
@@ -33,9 +42,11 @@ type Engine struct {
 }
 
 type request struct {
-	Stream              bool `json:"stream"`
-	MaxTokens           *int `json:"max_tokens"`
-	MaxCompletionTokens *int `json:"max_completion_tokens"`
+	// A prompt may be text or, as the replay lab sends it, a list of token ids.
+	Prompt              json.RawMessage `json:"prompt"`
+	Stream              bool            `json:"stream"`
+	MaxTokens           *int            `json:"max_tokens"`
+	MaxCompletionTokens *int            `json:"max_completion_tokens"`
 	StreamOptions       *struct {
 		IncludeUsage bool `json:"include_usage"`
 	} `json:"stream_options"`
@@ -52,6 +63,7 @@ func (e *Engine) Handler() http.Handler {
 		}})
 	})
 	mux.HandleFunc("GET /health", func(http.ResponseWriter, *http.Request) {})
+	mux.HandleFunc("POST /tokenize", e.tokenize)
 	mux.HandleFunc("GET /metrics", e.metrics)
 	return mux
 }
@@ -75,10 +87,18 @@ func (e *Engine) generate(chat bool) http.HandlerFunc {
 			return
 		}
 
+		if !e.acquire(r) {
+			return
+		}
+		defer e.release()
 		e.running.Add(1)
 		defer e.running.Add(-1)
 
 		prompt := len(body) / 4
+		var ids []int
+		if json.Unmarshal(req.Prompt, &ids) == nil && len(ids) > 0 {
+			prompt = len(ids)
+		}
 		completion := e.Tokens
 		if completion == 0 {
 			completion = 16
@@ -171,6 +191,47 @@ func (e *Engine) generate(chat bool) http.HandlerFunc {
 		fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}
+}
+
+// acquire waits for a free generation slot. It reports false if the client
+// went away first.
+func (e *Engine) acquire(r *http.Request) bool {
+	if e.MaxNumSeqs <= 0 {
+		return true
+	}
+	e.slotsOnce.Do(func() { e.slots = make(chan struct{}, e.MaxNumSeqs) })
+	select {
+	case e.slots <- struct{}{}:
+		return true
+	case <-r.Context().Done():
+		return false
+	}
+}
+
+func (e *Engine) release() {
+	if e.slots != nil {
+		<-e.slots
+	}
+}
+
+// tokenize answers like vLLM's /tokenize with a made-up tokenizer: one token
+// per word, the same word always the same id.
+func (e *Engine) tokenize(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":{"message":"invalid JSON","type":"BadRequestError","code":400}}`, http.StatusBadRequest)
+		return
+	}
+	words := strings.Fields(req.Prompt)
+	tokens := make([]int, len(words))
+	for i, word := range words {
+		h := fnv.New32a()
+		h.Write([]byte(word))
+		tokens[i] = 1000 + int(h.Sum32()%30000)
+	}
+	writeJSON(w, map[string]any{"count": len(tokens), "max_model_len": 32768, "tokens": tokens})
 }
 
 func (e *Engine) embed(w http.ResponseWriter, r *http.Request) {

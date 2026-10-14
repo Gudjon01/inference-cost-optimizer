@@ -66,13 +66,24 @@ func TestDrainAndUndrain(t *testing.T) {
 	pool := newPool(t)
 	h := Handler(pool, "tok", func() any { return map[string]int{"exported": 3} })
 
+	type answer struct {
+		replicaView
+		WasDrained bool `json:"was_drained"`
+	}
 	w := call(h, "POST", "/admin/replicas/r2/drain", "tok")
-	var got replicaView
+	var got answer
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != 200 {
 		t.Fatalf("drain: status %d body %s", w.Code, w.Body)
 	}
-	if !got.Drained || got.Name != "r2" || got.Inflight != 0 {
+	if !got.Drained || got.Name != "r2" || got.Inflight != 0 || got.WasDrained {
 		t.Errorf("drain answered %+v", got)
+	}
+	// A second drain succeeds too, but is told it was not the first: that is
+	// how two replay runs find out which of them holds the replica.
+	w = call(h, "POST", "/admin/replicas/r2/drain", "tok")
+	var again answer
+	if err := json.Unmarshal(w.Body.Bytes(), &again); err != nil || !again.Drained || !again.WasDrained {
+		t.Errorf("second drain answered %s", w.Body)
 	}
 	// Traffic now avoids r2.
 	for i := 0; i < 4; i++ {
