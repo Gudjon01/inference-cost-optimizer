@@ -100,7 +100,7 @@ def report(config_path: Path, window: str, until: str | None, out: TextIO) -> No
         result = cost.analyze(cfg, span, measure.fetch(client, span), generated_at=now)
     except config_module.ConfigError as e:
         raise click.ClickException(f"{config_path}: {e}") from None
-    out.write(report_module.render(result, replays.fetch(client, [r.name for r in cfg.replicas], end)))
+    out.write(report_module.render(result, replays.fetch(client, [r.name for r in cfg.replicas], span.since, span.until)))
 
     # Standard error, so that `--out -` stays a clean HTML stream.
     summary = (

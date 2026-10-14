@@ -323,10 +323,18 @@ def test_replay_command_end_to_end(install, tmp_path, monkeypatch):
         # And the report picks the run up.
         from ico.analyzer import replays
 
-        [shown] = replays.fetch(client, ["r1", "r2"], datetime.now(timezone.utc) + timedelta(minutes=1))
+        later = datetime.now(timezone.utc) + timedelta(minutes=1)
+        [shown] = replays.fetch(client, ["r1", "r2"], later - timedelta(days=1), later)
         assert shown.replica == "r1" and (shown.ttft_p95_ms, shown.itl_p95_ms) == (200, 500)
         assert [c.config_id for c in shown.configs[:2]] == ["current", "max-num-seqs=6"], "the current config first, then the cheapest"
         assert shown.winner.config_id == "max-num-seqs=6" and 0.3 < shown.saving < 0.9
-        assert replays.fetch(client, ["r1"], noon - timedelta(days=30)) == [], "a report for a window before the run does not show it"
+        # A report of the very traffic replayed (12:00 to 13:00) shows it,
+        # although the replay finished after that window ended.
+        [of_window] = replays.fetch(client, ["r1"], noon, noon + timedelta(hours=1))
+        assert of_window.traffic_since == noon and of_window.finished_at > noon + timedelta(hours=1)
+        month_ago = noon - timedelta(days=30)
+        assert replays.fetch(client, ["r1"], month_ago - timedelta(hours=1), month_ago) == [], (
+            "a report for a window before the run does not show it"
+        )
     finally:
         store.connect(ch, database="default").command(f"DROP DATABASE IF EXISTS `{ch.database}`")
