@@ -3,6 +3,7 @@
 # Local deployment settings and secrets
 deploy/.env
 deploy/config.yaml
+deploy/sweep.yaml
 
 # Python
 .venv/

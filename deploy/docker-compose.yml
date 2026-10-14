@@ -93,6 +93,9 @@ services:
       HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-0}
     volumes:
       - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    ports:
+      # The replay lab runs on this host and sends its load straight to the engine.
+      - "127.0.0.1:8000:8000"
     ipc: host
     deploy: *gpu
     restart: unless-stopped
@@ -118,14 +121,21 @@ services:
       - "127.0.0.1:9835:9835"
     restart: unless-stopped
 
-  # The fake engine ships in the gateway image.
-  mockengine-1: &mockengine
+  # The fake engine ships in the gateway image. The first one takes its flags
+  # from ICO_MOCK_1_ARGS, so `ico replay` can be tried on it without a GPU.
+  mockengine-1:
     profiles: [mock]
     image: ico/gateway:dev
     entrypoint: ["/usr/local/bin/mockengine"]
-    command: ["-model", "mock-model"]
+    command: -model mock-model ${ICO_MOCK_1_ARGS:---max-num-seqs 4}
+    ports:
+      - "127.0.0.1:8001:8000"
 
-  mockengine-2: *mockengine
+  mockengine-2:
+    profiles: [mock]
+    image: ico/gateway:dev
+    entrypoint: ["/usr/local/bin/mockengine"]
+    command: -model mock-model --max-num-seqs 4
 
 volumes:
   clickhouse-data:

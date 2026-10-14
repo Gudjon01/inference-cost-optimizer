@@ -10,6 +10,23 @@ replicas:
     gpu_model: L4
     gpu_count: 1
     # models: [Qwen/Qwen2.5-0.5B-Instruct]   # optional: send only these models here
+    # How `ico replay` restarts this engine under other flags. The simplest is
+    # to let it copy the engine's container with other flags:
+    #   launcher:
+    #     kind: docker
+    #     container: ico-vllm-1
+    # Or it runs commands of yours on the machine the CLI runs on, with {flags}
+    # filled in, as below. Without a launcher the CLI prints the flags and
+    # waits for you to restart the engine by hand.
+    launcher:
+      kind: command
+      start: docker compose --profile vllm up -d vllm
+      stop: docker compose --profile vllm stop vllm
+      env:
+        ICO_VLLM_ARGS: "--otlp-traces-endpoint grpc://collector:4317 {flags}"
+      # The flags in production today. Every replay ends by restoring them.
+      flags:
+        gpu-memory-utilization: 0.9
 
 # USD per GPU-hour, by gpu_model. Idle hours are billed too.
 gpu_price_per_hour:
@@ -35,6 +52,7 @@ slo:
 gateway:
   listen: ":8080"
   admin_listen: ":8081"
+  admin_url: http://localhost:8081   # where the CLI reaches the admin API
   collector: collector:4317
   # Request text is hashed in blocks of this many characters, up to max_blocks,
   # to find shared prefixes. The text itself is never stored.

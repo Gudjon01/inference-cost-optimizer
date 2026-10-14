@@ -8,6 +8,16 @@ replicas:
     host: dev
     gpu_model: mock
     gpu_count: 1
+    # Lets `ico replay` restart this fake engine under other flags. Run it from deploy/:
+    #   ico replay --config config.mock.yaml --replica mock-1 --configs sweep.mock.yaml --replica-url http://localhost:8001
+    launcher:
+      kind: command
+      start: docker compose --profile mock up -d mockengine-1
+      stop: docker compose --profile mock stop mockengine-1
+      env:
+        ICO_MOCK_1_ARGS: "{flags}"
+      flags:
+        max-num-seqs: 4
   - name: mock-2
     url: http://mockengine-2:8000
     host: dev
@@ -19,6 +29,7 @@ gpu_price_per_hour:
 
 gateway:
   collector: collector:4317
+  admin_url: http://localhost:8081
 
 clickhouse:
   host: clickhouse

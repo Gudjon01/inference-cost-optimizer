@@ -14,7 +14,8 @@ and a replay lab finds the cheaper setup on the team's own traffic.
 | 2. Gateway: pass-through, streaming, records, gRPC export | Done |
 | 3. Collector: gateway ingest, vLLM and GPU scrapers, OTLP receiver, trace-id join | Done |
 | 4. Analyzer views and `ico report` | Done |
-| 5. Replay lab | Next |
+| 5. Replay lab: sampling, rate ramp, time budget, safety, launchers, successive halving | Done |
+| 6. README with a real before-and-after number, open-source launch | Next |
 
 Checked against real hardware so far: vLLM 0.10.1.1 on a GeForce RTX 2060 with
 nvidia_gpu_exporter 1.15.1. Still to check on a rented datacenter GPU:
@@ -30,7 +31,7 @@ nvidia_gpu_exporter 1.15.1. Still to check on a rented datacenter GPU:
 
 ```text
 gateway/   Go module: OpenAI-compatible pass-through, plus a fake engine for tests
-py/        Python package `ico`: collector, analyzer and report; the replay lab later
+py/        Python package `ico`: collector, analyzer, report and replay lab
 proto/     The gRPC contract between gateway and collector
 schema/    ClickHouse migrations, applied by the collector at startup
 deploy/    docker-compose.yml, example config, dcgm-exporter counters
@@ -82,6 +83,8 @@ elsewhere. It shows, for the window:
 - cost per million tokens, and what it would be without idle time;
 - active and idle cost per model, and idle GPU-hours;
 - the split of each replica's cost across tenants;
+- the latest replay of each replica: the current config against the cheapest
+  one that held the latency limits;
 - the telemetry level of each host, and the inputs every number came from.
 
 How the numbers are made:
@@ -100,6 +103,77 @@ The views behind it take the window as parameters and can be queried
 directly, for example
 `SELECT * FROM usage_by_tenant(since = '2026-10-14 00:00:00', until = '2026-10-15 00:00:00')`.
 They are defined in `schema/002_analyzer.sql`.
+
+## Find a cheaper config
+
+`ico replay` tests engine configs against the traffic the gateway recorded and
+names the cheapest one that holds the latency limits. Run it on the GPU host
+of the replica, from `deploy/`, with the CLI installed (`pip install ./py`):
+
+```bash
+ico replay --config config.yaml --replica r1 --configs sweep.yaml --window 1h --slo ttft_p95=500ms,itl_p95=50ms --budget 45m
+```
+
+It needs `ICO_ADMIN_TOKEN` in the environment, and it has to reach ClickHouse
+and the engine from where it runs: set `ICO_CLICKHOUSE_HOST` and pass
+`--replica-url` when their addresses in the config file only resolve inside
+Compose.
+
+What a run does, in order:
+
+1. Takes a run of 300 consecutive recorded requests that looks like the whole
+   window in prompt and completion lengths, shared prefixes and burstiness.
+2. Rebuilds them as prompts of token ids: exactly the recorded lengths, and
+   the same leading tokens wherever the recorded prefix hashes matched. No
+   recorded text exists to replay, and none is needed.
+3. Drops configs that cannot fit in GPU memory on paper, before any restart.
+4. Drains the replica at the gateway.
+5. Restarts the engine on each config, the current one first, and raises the
+   request rate until a latency limit breaks. The highest rate that held gives
+   the cost of a million tokens on that config. Every config, the current one
+   included, is measured on a freshly started engine, so they are compared
+   under the same conditions.
+6. Restores the original flags and undrains the replica.
+
+Once the current config is measured it knows how long a load and a test take,
+prints its plan, and waits for a yes (`--yes` skips it). When a full test of
+every config fits the budget, every config gets one. When it does not but
+successive halving does, every config gets a short run, the better half a
+longer one, and the final two a full test; only a full test can win. Short
+runs use shorter steps and fewer requests per step, which makes halving pay
+off when there are many configs and loading one is quick next to testing it.
+
+Pick latency limits with room above what the traffic sees today. The command
+prints the time to first token recorded in the window: when that is close to
+the limit, whether a rate holds comes down to a few requests in each step, and
+the rate found swings from run to run.
+
+The replica is put back whatever happens in between: a config that crashes, a
+failed health check, Ctrl-C. A watchdog process does the same if the command
+itself is killed. A replica whose original config will not start again stays
+drained, so it gets no traffic. One replay runs per replica at a time, and
+draining the only replica needs `--single-replica`.
+
+How the engine is restarted is set per replica under `launcher` in the config
+file:
+
+- `docker` runs each config in a copy of the engine's container: same image,
+  GPUs, volumes, environment, ports and networks, other engine flags. It reads
+  the flags in production from the running container. The original container
+  is only stopped, never changed, so putting it back is starting it again.
+  It needs access to the Docker socket.
+- `command` runs your own start and stop commands, with `{flags}` filled in.
+- `manual` prints the flags and waits for you to restart the engine.
+
+`sweep.example.yaml` shows the sweep file. Configs that change precision, such as FP8, are measured but
+cannot win until answer quality is checked.
+
+To try it without a GPU, start the `mock` profile, send some traffic through
+the gateway, then from `deploy/`:
+
+```bash
+ico replay --config config.mock.yaml --replica mock-1 --configs sweep.mock.yaml --replica-url http://localhost:8001 --step-seconds 3 --min-step-requests 15
+```
 
 ## What the gateway does
 
