@@ -46,6 +46,6 @@ jobs:
       ICO_TEST_CLICKHOUSE_PASSWORD: ci-only
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0  # this action publishes exact release tags only
       - run: uv sync --frozen
       - run: uv run pytest -q
