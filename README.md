@@ -1,8 +1,9 @@
-# inference-cost-optimizer
+# ico
 
-Find out what your self-hosted LLMs cost per million tokens, how much of that
-pays for idle GPUs, and which engine config serves the same traffic for less,
-tested on a replay of your own traffic, on your own machines.
+**ico**, the inference cost optimizer, finds out what your self-hosted LLMs
+cost per million tokens, how much of that pays for idle GPUs, and which engine
+config serves the same traffic for less, tested on a replay of your own
+traffic, on your own machines.
 
 **From a real run.** An RTX 2060 serves Qwen3-0.6B on vLLM, capped at
 `--max-num-seqs 8`. `ico replay` took five minutes of traffic the gateway had
@@ -22,8 +23,6 @@ starting cap was chosen for this demo; against vLLM's own default, 64 is still
 about 20% cheaper on this traffic. Costs assume $0.10 per GPU-hour, and the
 ratios do not depend on the price.
 
-`ico` is a codename until the project has a name.
-
 ## What it does
 
 - **Gateway** (Go): an OpenAI-compatible pass-through in front of your engine
@@ -34,8 +33,8 @@ ratios do not depend on the price.
 - **Collector** (Python): puts the gateway's records, the engine's metrics and
   traces, and the GPU exporters' counters into ClickHouse.
 - **Report** (`ico report`): cost per million tokens, the share of GPU cost
-  that paid for idle time, cost per model and per tenant, and the latest
-  replay, as one static HTML file.
+  that paid for idle time, cost per model and per tenant, and the replay run
+  on that traffic, as one static HTML file.
 - **Replay lab** (`ico replay`): restarts the engine under each candidate
   config on a drained replica, raises your recorded traffic shape until a
   latency limit breaks, and names the cheapest config that holds. It puts the
@@ -46,16 +45,30 @@ prompts are synthetic, rebuilt from token counts and prefix hashes.
 
 ## Status
 
-Works today with vLLM on NVIDIA GPUs, deployed with Docker Compose. It has run
-on real hardware only on a GeForce RTX 2060, with vLLM 0.10.1.1 and
-nvidia_gpu_exporter 1.15.1. Still to check on a datacenter GPU:
+Works today with vLLM on NVIDIA GPUs, deployed with Docker Compose or as plain
+processes. It has run on real hardware twice:
 
-- dcgm-exporter. Its adapter is tested against a hand-written page
-  (`py/tests/fixtures/dcgm-exporter.handwritten.metrics.txt`), not a real one.
-- A current vLLM. Its metric names were read from the v0.31.0 source, not a
-  running server.
-- Prefill and decode time in engine spans. vLLM 0.10.1.1 leaves them out, so
-  the tenant split falls back to token counts there.
+| | Engine | GPU telemetry | What ran |
+| --- | --- | --- | --- |
+| H100 SXM, RunPod, 2026-10-14 | vLLM 0.31.0, Qwen3-8B | dcgm-exporter 4.5.2-4.8.1, with profiling counters (level L3) | 16 minutes of four simulated tenants, the report, and a 20-minute replay |
+| GeForce RTX 2060 | vLLM 0.10.1.1, Qwen3-0.6B | nvidia_gpu_exporter 1.15.1 (level L2) | Recorded traffic, the report, and the replays above |
+
+On the H100, everything the 2060 could not show worked: DCGM's profiling
+counters, without the `SYS_ADMIN` capability; vLLM 0.31's metric names; and
+prefill and decode time in its engine spans, for every request, so the tenant
+split followed engine time. The collector, ClickHouse and the report ran on
+another machine, across an SSH tunnel. The dcgm-exporter adapter's test
+fixture (`py/tests/fixtures/dcgm-exporter.handwritten.metrics.txt`) is still
+the hand-written one.
+
+Still to check on real hardware: successive halving. On the H100, a full test
+of the configs fit the budget, so the replay never needed it.
+
+Known limit: the replay sends independent requests at a steady rate, so it
+does not build up the long sessions real traffic holds, such as conversations
+and agents resending their history. On the H100 it found the current config
+holding 43 requests/s; the same traffic sent live as sessions was comfortable
+at about 22. Its rates compare configs; they are not capacity to plan by.
 
 Not built yet: SGLang and AMD adapters, Kubernetes and Helm, live-mirror
 replay, and a check of answer quality. Until that check exists, configs that
