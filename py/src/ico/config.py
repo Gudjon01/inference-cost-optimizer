@@ -15,10 +15,33 @@ import yaml
 
 
 GPU_EXPORTER_KINDS = ("dcgm", "nvidia_smi")
+LAUNCHER_KINDS = ("manual", "command", "docker")
 
 
 class ConfigError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class LauncherConfig:
+    """How the replay lab restarts a replica's engine under other flags."""
+
+    # "manual": the CLI prints the flags and a person restarts the engine.
+    # "command": the CLI runs the start and stop commands below.
+    # "docker": the CLI copies the engine's container with other flags.
+    kind: str = "manual"
+    # For "docker": the name of the container the engine runs in.
+    container: str = ""
+    # Shell commands, run on the machine the CLI runs on. {flags} in start,
+    # and in the values of env, is replaced by the engine flags.
+    start: str = ""
+    stop: str = ""
+    env: dict[str, str] = field(default_factory=dict)
+    cwd: str = ""
+    # The engine flags in production today, without the leading dashes. Every
+    # candidate is these with some changed, and they are what gets restored.
+    # The docker launcher reads them from the container instead.
+    flags: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -28,6 +51,7 @@ class Replica:
     host: str = ""
     gpu_model: str = ""
     gpu_count: int = 1
+    launcher: LauncherConfig = LauncherConfig()
 
 
 @dataclass(frozen=True)
@@ -79,8 +103,19 @@ class Collector:
 
 
 @dataclass(frozen=True)
+class Gateway:
+    """The parts of the gateway section the Python side uses."""
+
+    # Where the CLI reaches the gateway's admin API.
+    admin_url: str = "http://localhost:8081"
+    # Size of the blocks request text is hashed in; see the gateway.
+    prefix_block_chars: int = 256
+
+
+@dataclass(frozen=True)
 class Config:
     replicas: tuple[Replica, ...]
+    gateway: Gateway = Gateway()
     gpu_price_per_hour: dict[str, float] = field(default_factory=dict)
     models: dict[str, Model] = field(default_factory=dict)
     slo: Slo = Slo()
@@ -96,9 +131,7 @@ def load(path: str | os.PathLike[str]) -> Config:
 
 
 def parse(raw: dict[str, Any]) -> Config:
-    replicas = tuple(
-        _build(Replica, r, f"replicas[{i}]") for i, r in enumerate(raw.get("replicas") or [])
-    )
+    replicas = tuple(_replica(r, f"replicas[{i}]") for i, r in enumerate(raw.get("replicas") or []))
     if not replicas:
         raise ConfigError("at least one replica is required")
     names = [r.name for r in replicas]
@@ -116,8 +149,17 @@ def parse(raw: dict[str, Any]) -> Config:
     if port := os.environ.get("ICO_CLICKHOUSE_PORT"):
         clickhouse = replace(clickhouse, port=int(port))
 
+    gateway_raw = raw.get("gateway") or {}
+    if not isinstance(gateway_raw, dict):
+        raise ConfigError("gateway: expected a mapping")
+    gateway = Gateway(
+        admin_url=str(os.environ.get("ICO_GATEWAY_ADMIN") or gateway_raw.get("admin_url") or Gateway.admin_url).rstrip("/"),
+        prefix_block_chars=int((gateway_raw.get("prefix_hash") or {}).get("block_chars") or Gateway.prefix_block_chars),
+    )
+
     return Config(
         replicas=replicas,
+        gateway=gateway,
         gpu_price_per_hour={str(k): float(v) for k, v in (raw.get("gpu_price_per_hour") or {}).items()},
         models={
             str(name): _build(Model, m, f"models.{name}") for name, m in (raw.get("models") or {}).items()
@@ -126,6 +168,19 @@ def parse(raw: dict[str, Any]) -> Config:
         clickhouse=clickhouse,
         collector=_collector(raw.get("collector") or {}),
     )
+
+
+def _replica(raw: Any, where: str) -> Replica:
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{where}: expected a mapping")
+    launcher = _build(LauncherConfig, raw.get("launcher") or {}, f"{where}.launcher")
+    if launcher.kind not in LAUNCHER_KINDS:
+        raise ConfigError(f"{where}.launcher: unknown kind {launcher.kind!r}, expected one of {', '.join(LAUNCHER_KINDS)}")
+    if launcher.kind == "command" and not (launcher.start and launcher.stop):
+        raise ConfigError(f"{where}.launcher: a command launcher needs both start and stop")
+    if launcher.kind == "docker" and not launcher.container:
+        raise ConfigError(f"{where}.launcher: a docker launcher needs the name of the container")
+    return replace(_build(Replica, {k: v for k, v in raw.items() if k != "launcher"}, where), launcher=launcher)
 
 
 def _collector(raw: Any) -> Collector:

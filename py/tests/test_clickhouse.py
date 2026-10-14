@@ -40,7 +40,7 @@ def cfg():
 
 
 def test_migrations_apply_once(cfg):
-    assert store.migrate(cfg, SCHEMA_DIR) == ["001_init.sql", "002_analyzer.sql"]
+    assert store.migrate(cfg, SCHEMA_DIR) == sorted(p.name for p in SCHEMA_DIR.glob("*.sql"))
     assert store.migrate(cfg, SCHEMA_DIR) == [], "a second run must find nothing to do"
     tables = {r[0] for r in store.connect(cfg).query("SHOW TABLES").result_rows}
     assert {"requests", "engine_spans", "engine_metrics", "gpu_metrics", "replay_runs", "replay_results"} <= tables

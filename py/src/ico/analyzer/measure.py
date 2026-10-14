@@ -145,12 +145,12 @@ def _view(client: Client, name: str, precision: int, window: Window) -> list[dic
     kind = f"DateTime64({precision}, 'UTC')"
     result = client.query(
         f"SELECT * FROM {name}(since = {{since:{kind}}}, until = {{until:{kind}}})",
-        parameters={"since": _stamp(window.since), "until": _stamp(window.until)},
+        parameters={"since": stamp(window.since), "until": stamp(window.until)},
     )
     return [dict(zip(result.column_names, row)) for row in result.result_rows]
 
 
-def _stamp(t: datetime) -> str:
+def stamp(t: datetime) -> str:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 

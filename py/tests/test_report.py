@@ -109,6 +109,59 @@ def test_empty_window_says_so_instead_of_showing_zeros():
     assert "No GPU telemetry in this window." in page
 
 
+def replay_run(**overrides):
+    from ico.analyzer.replays import ReplayConfig, ReplayRun
+
+    def config(name, rate=0.0, cost=0.0, **flags):
+        held = rate > 0
+        return ReplayConfig(name, flags.pop("stage", 3), flags.pop("outcome", "tested"), flags.pop("note", ""), held, rate, rate * 250, cost,
+                            flags.pop("is_baseline", False), flags.pop("is_winner", False), flags.pop("quality_unverified", False))  # fmt: skip
+
+    fields = dict(
+        replica="r1",
+        finished_at=T0 + timedelta(hours=20),
+        traffic_since=T0 + timedelta(hours=18),
+        traffic_until=T0 + timedelta(hours=19),
+        ttft_p95_ms=500.0,
+        itl_p95_ms=50.0,
+        configs=(
+            config("current", 12.4, 0.0090, is_baseline=True),
+            config("gpu-memory-utilization=0.7", 15.5, 0.0072, is_winner=True),
+            config("quantization=fp8", 20.0, 0.0056, quality_unverified=True),
+            config("gpu-memory-utilization=0.2", outcome="ruled_out", note="the weights need 1.4 GiB and this memory fraction allows 1.2 GiB"),
+            config("max-num-seqs=1"),
+            config("max-num-seqs=16", 9.0, 0.0101, stage=1),
+        ),
+    )
+    return ReplayRun(**{**fields, **overrides})
+
+
+def test_report_shows_the_latest_replay_with_before_and_after():
+    page = text_of(report.render(sample_report(), [replay_run()]))
+    assert "Replay on r1" in page
+    assert "gpu-memory-utilization=0.7 serves a million tokens for $0.0072 at full load, 20% below the $0.0090 of the current config." in page
+    assert "Replayed 2026-10-14 20:00 UTC on the shape of the traffic recorded 2026-10-14 18:00 to 2026-10-14 19:00." in page
+    assert "passed 500 ms" in page and "passed 50 ms" in page
+    assert "Current config 12.40 3,100 $0.0090" in page
+    assert "gpu-memory-utilization=0.7 15.50 3,875 $0.0072 Cheapest that holds the limits" in page
+    assert "quantization=fp8 20.00 5,000 $0.0056 Changes precision: answer quality is not checked, so it cannot win" in page
+    assert "gpu-memory-utilization=0.2 n/a n/a n/a Ruled out before any restart: the weights need 1.4 GiB" in page
+    assert "max-num-seqs=1 n/a n/a n/a Held the limits at no rate tried" in page
+    assert "max-num-seqs=16 9.00 2,250 $0.010 Out after a short run" in page
+
+
+def test_report_says_when_the_current_config_already_wins_or_nothing_held():
+    from dataclasses import replace
+
+    run = replay_run()
+    current_wins = replace(run, configs=(replace(run.configs[0], is_winner=True), replace(run.configs[1], is_winner=False, cost_per_mtok=0.02)))
+    assert "The current config is the cheapest of those tested: $0.0090 per million tokens at full load." in text_of(report.render(sample_report(), [current_wins]))
+
+    nothing = replace(run, configs=(run.configs[4],))
+    assert "No config held the latency limits at any rate tried." in text_of(report.render(sample_report(), [nothing]))
+    assert "Replay on" not in text_of(report.render(sample_report())), "no replay, no section"
+
+
 def test_long_tenant_lists_fold_into_one_row_that_keeps_the_total():
     many = [Usage("r1", "m", f"tenant-{i:03d}", 1, 0, 1000 + i, 0) for i in range(report.MAX_TENANT_ROWS + 25)]
     result = run(cfg(replica()), measurements(usage=many, traffic={"r1": Traffic(3600, Seen(T0, T0 + timedelta(hours=24)))}))

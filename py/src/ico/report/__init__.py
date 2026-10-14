@@ -5,10 +5,12 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Sequence
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ico.analyzer.cost import BY_PHASE_TIME, BY_PROFILING, BY_REQUESTS, BY_TOKENS, CostReport, TenantCost
+from ico.analyzer.replays import ReplayRun
 
 # Past this many rows the smallest tenants are folded into one line.
 MAX_TENANT_ROWS = 100
@@ -101,10 +103,16 @@ _env.filters.update(
 )
 
 
-def render(report: CostReport) -> str:
+# Why a replayed config has no numbers, by its recorded outcome.
+NOT_MEASURED = {"ruled_out": "Ruled out before any restart", "failed_to_start": "Did not start", "skipped": "Not tested"}
+
+
+def render(report: CostReport, replays: Sequence[ReplayRun] = ()) -> str:
     shown, folded = report.tenants[:MAX_TENANT_ROWS], report.tenants[MAX_TENANT_ROWS:]
     return _env.get_template("report.html.j2").render(
         report=report,
+        replays=replays,
+        not_measured=NOT_MEASURED,
         tenants=shown,
         folded=_fold(folded),
         folded_count=len(folded),

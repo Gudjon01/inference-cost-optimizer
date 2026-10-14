@@ -286,6 +286,51 @@
 </section>
 {% endif %}
 
+{% for run in replays %}
+<section>
+  <h2>Replay on {{ run.replica }}</h2>
+  {% if run.winner is none %}
+  <p class="lead">No config held the latency limits at any rate tried.</p>
+  {% elif run.saving is not none %}
+  <p class="lead">{{ run.winner.config_id }} serves a million tokens for {{ run.winner.cost_per_mtok | money }} at full load, {{ run.saving | percent }} below the {{ run.current.cost_per_mtok | money }} of the current config.</p>
+  {% else %}
+  <p class="lead">The current config is the cheapest of those tested: {{ run.winner.cost_per_mtok | money }} per million tokens at full load.</p>
+  {% endif %}
+  <p class="sub">Replayed {{ run.finished_at | moment }} UTC on the shape of the traffic recorded {{ run.traffic_since | moment }} to {{ run.traffic_until | moment }}. Each config was loaded until time to first token passed {{ run.ttft_p95_ms | round | int }} ms or the gap between tokens passed {{ run.itl_p95_ms | round | int }} ms at the 95th percentile. These costs are at the highest rate a config sustains, so they compare configs with each other; they have no idle time in them and are lower than the cost at the top of this report.</p>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Config</th>
+          <th class="n">Requests per second</th>
+          <th class="n">Tokens per second</th>
+          <th class="n">Per million tokens</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in run.configs %}
+        <tr>
+          <td class="name">{{ "Current config" if c.is_baseline else c.config_id }}</td>
+          {% if c.held %}
+          <td class="n">{{ "%.2f" | format(c.rate_rps) }}</td>
+          <td class="n">{{ c.tokens_s | count }}</td>
+          <td class="n">{{ c.cost_per_mtok | money }}</td>
+          <td class="name">{% if c.is_winner %}Cheapest that holds the limits{% endif %}{% if c.quality_unverified %}Changes precision: answer quality is not checked, so it cannot win{% elif c.stage == 1 %}Out after a short run{% elif c.stage == 2 %}Out after a longer run{% endif %}</td>
+          {% else %}
+          <td class="n">n/a</td>
+          <td class="n">n/a</td>
+          <td class="n">n/a</td>
+          <td class="name">{{ not_measured.get(c.outcome, "Held the limits at no rate tried") }}{% if c.note and c.outcome in not_measured %}: {{ c.note }}{% endif %}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+
 <section>
   <h2>Telemetry level</h2>
   <p class="sub">How much the GPUs report about themselves. It decides how the active share above was measured; n/a marks a counter the host does not report.</p>
