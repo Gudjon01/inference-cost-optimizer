@@ -97,6 +97,19 @@ def test_command_launcher_reports_a_failing_command_with_its_output():
         launchers.build(cfg, "r1", ask=lambda _: None).start({})
 
 
+@pytest.mark.parametrize(
+    ("cfg", "message"),
+    [
+        (LauncherConfig(kind="kubernetes"), "unknown kind 'kubernetes', expected one of manual, command, docker"),
+        (LauncherConfig(kind="docker"), "needs the name of the container"),
+        (LauncherConfig(kind="command", start="up"), "needs both a start and a stop command"),
+    ],
+)
+def test_the_replay_command_checks_its_launcher(cfg, message):
+    with pytest.raises(launchers.LauncherError, match=message):
+        launchers.build(cfg, "r1", ask=lambda _: None)
+
+
 def test_manual_launcher_asks_a_person_and_cannot_run_unattended():
     asked = []
     launcher = launchers.build(LauncherConfig(), "r2", ask=asked.append)

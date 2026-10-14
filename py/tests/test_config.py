@@ -34,6 +34,13 @@ def test_password_comes_from_the_environment(monkeypatch):
     assert config.load(DEPLOY / "config.example.yaml").clickhouse.password == "from-env"
 
 
+def test_a_launcher_the_collector_does_not_know_does_not_stop_it():
+    # The collector and the report never use a launcher. A config written for
+    # a newer CLI must not keep them from starting.
+    cfg = config.parse({"replicas": [{"name": "r1", "url": "http://x", "launcher": {"kind": "kubernetes", "namespace": "ml"}}]})
+    assert cfg.replicas[0].launcher.kind == "kubernetes"
+
+
 @pytest.mark.parametrize(
     ("raw", "message"),
     [

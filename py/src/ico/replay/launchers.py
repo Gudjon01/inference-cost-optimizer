@@ -195,11 +195,19 @@ class DockerLauncher(Launcher):
             raise LauncherError(f"Docker refused to {fn.__name__.replace('_', ' ')}: {e}") from None
 
 
+KINDS = ("manual", "command", "docker")
+
+
 def build(cfg: LauncherConfig, replica: str, ask: Callable[[str], None] | None = None) -> Launcher:
+    where = f"replica {replica}, launcher"
     if cfg.kind == "command":
         return CommandLauncher(cfg)
     if cfg.kind == "docker":
+        if not cfg.container:
+            raise LauncherError(f"{where}: a docker launcher needs the name of the container")
         return DockerLauncher(cfg.container)
+    if cfg.kind != "manual":
+        raise LauncherError(f"{where}: unknown kind {cfg.kind!r}, expected one of {', '.join(KINDS)}")
     if ask is None:
         raise LauncherError("the manual launcher needs someone to ask")
     return ManualLauncher(replica, ask)

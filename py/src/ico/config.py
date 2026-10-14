@@ -15,7 +15,6 @@ import yaml
 
 
 GPU_EXPORTER_KINDS = ("dcgm", "nvidia_smi")
-LAUNCHER_KINDS = ("manual", "command", "docker")
 
 
 class ConfigError(ValueError):
@@ -173,13 +172,10 @@ def parse(raw: dict[str, Any]) -> Config:
 def _replica(raw: Any, where: str) -> Replica:
     if not isinstance(raw, dict):
         raise ConfigError(f"{where}: expected a mapping")
+    # Only the replay command uses the launcher, and it checks it when it
+    # builds one. The collector and the report must not refuse to start over
+    # a launcher setting, say one written for a newer version of the CLI.
     launcher = _build(LauncherConfig, raw.get("launcher") or {}, f"{where}.launcher")
-    if launcher.kind not in LAUNCHER_KINDS:
-        raise ConfigError(f"{where}.launcher: unknown kind {launcher.kind!r}, expected one of {', '.join(LAUNCHER_KINDS)}")
-    if launcher.kind == "command" and not (launcher.start and launcher.stop):
-        raise ConfigError(f"{where}.launcher: a command launcher needs both start and stop")
-    if launcher.kind == "docker" and not launcher.container:
-        raise ConfigError(f"{where}.launcher: a docker launcher needs the name of the container")
     return replace(_build(Replica, {k: v for k, v in raw.items() if k != "launcher"}, where), launcher=launcher)
 
 
