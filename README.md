@@ -101,7 +101,14 @@ scripts/   Toolchain wrappers
 
 ## Run it
 
-Needs Docker. From `deploy/`:
+Needs Docker and git. Take the latest release:
+
+```bash
+git clone --branch v0.1.0 https://github.com/Gudjon01/inference-cost-optimizer.git
+cd inference-cost-optimizer/deploy
+```
+
+Then, from `deploy/`:
 
 ```bash
 cp .env.example .env            # then set the two secrets in it
@@ -322,6 +329,13 @@ Compose stack up, set `ICO_TEST_CLICKHOUSE_HOST=localhost`,
 After editing `proto/`, regenerate both sides with `scripts/gen-proto.sh`.
 Migrations in `schema/` are applied once and recorded by file name: add a new
 numbered file, never edit one that has shipped.
+
+## Questions and help
+
+[Open an issue](https://github.com/Gudjon01/inference-cost-optimizer/issues/new/choose):
+a bug, a number that looks wrong, a question, or a request for help
+installing it. With the install-help template we set ico up with you, on your
+machines. Never paste secrets or your users' prompts; ico never needs them.
 
 ## License
 

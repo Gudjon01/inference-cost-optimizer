@@ -28,8 +28,13 @@ def text_of(html: str) -> str:
 
 @pytest.mark.parametrize(
     ("value", "shown"),
-    [(None, "n/a"), (0, "$0.00"), (1234.5, "$1,234"), (96, "$96.00"), (12.345, "$12.35"), (0.5, "$0.50"), (0.0123, "$0.012"), (0.00456, "$0.0046")],
-)
+    [
+        (None, "n/a"), (0, "$0.00"), (1234.5, "$1,234.50"), (96, "$96.00"), (12.345, "$12.35"), (0.5, "$0.500"),
+        (0.0123, "$0.0123"), (0.00456, "$0.00456"), (0.9996, "$1.00"),
+        # Two costs a replay compares, 4% apart, stay apart.
+        (0.0124, "$0.0124"), (0.0119, "$0.0119"),
+    ],
+)  # fmt: skip
 def test_money_keeps_a_precision_that_fits_the_size(value, shown):
     assert report.money(value) == shown
 
@@ -153,16 +158,16 @@ def replay_run(**overrides):
 def test_report_shows_the_latest_replay_with_before_and_after():
     page = text_of(report.render(sample_report(), [replay_run()]))
     assert "Replay on r1" in page
-    assert "gpu-memory-utilization=0.7 serves a million tokens for $0.0072 at full load, 20% below the $0.0090 of the current config." in page
+    assert "gpu-memory-utilization=0.7 serves a million tokens for $0.00720 at full load, 20% below the $0.00900 of the current config." in page
     assert "Replayed 2026-10-14 20:00 UTC on the shape of the traffic recorded 2026-10-14 18:00 to 2026-10-14 19:00." in page
     assert "A report shows the newest replay of traffic in its window" in page
     assert "passed 500 ms" in page and "passed 50 ms" in page
-    assert "Current config 12.40 3,100 $0.0090" in page
-    assert "gpu-memory-utilization=0.7 15.50 3,875 $0.0072 Cheapest that holds the limits" in page
-    assert "quantization=fp8 20.00 5,000 $0.0056 Changes precision: answer quality is not checked, so it cannot win" in page
+    assert "Current config 12.40 3,100 $0.00900" in page
+    assert "gpu-memory-utilization=0.7 15.50 3,875 $0.00720 Cheapest that holds the limits" in page
+    assert "quantization=fp8 20.00 5,000 $0.00560 Changes precision: answer quality is not checked, so it cannot win" in page
     assert "gpu-memory-utilization=0.2 n/a n/a n/a Ruled out before any restart: the weights need 1.4 GiB" in page
     assert "max-num-seqs=1 n/a n/a n/a Held the limits at no rate tried" in page
-    assert "max-num-seqs=16 9.00 2,250 $0.010 Out after a short run" in page
+    assert "max-num-seqs=16 9.00 2,250 $0.0101 Out after a short run" in page
 
 
 def test_report_says_when_the_current_config_already_wins_or_nothing_held():
@@ -170,7 +175,7 @@ def test_report_says_when_the_current_config_already_wins_or_nothing_held():
 
     run = replay_run()
     current_wins = replace(run, configs=(replace(run.configs[0], is_winner=True), replace(run.configs[1], is_winner=False, cost_per_mtok=0.02)))
-    assert "The current config is the cheapest of those tested: $0.0090 per million tokens at full load." in text_of(report.render(sample_report(), [current_wins]))
+    assert "The current config is the cheapest of those tested: $0.00900 per million tokens at full load." in text_of(report.render(sample_report(), [current_wins]))
 
     nothing = replace(run, configs=(run.configs[4],))
     assert "No config held the latency limits at any rate tried." in text_of(report.render(sample_report(), [nothing]))
@@ -184,7 +189,7 @@ def test_report_says_when_a_cheaper_config_is_within_the_margin():
     # 0.0085 against the current 0.0090: 6% cheaper. FP8 and the short run are cheaper too, but cannot win.
     near = replace(run, configs=(replace(run.configs[0], is_winner=True), replace(run.configs[1], is_winner=False, cost_per_mtok=0.0085), *run.configs[2:]))
     page = text_of(report.render(sample_report(), [near]))
-    assert "No config was clearly cheaper than the current one, at $0.0090 per million tokens at full load." in page
+    assert "No config was clearly cheaper than the current one, at $0.00900 per million tokens at full load." in page
     assert (
         "gpu-memory-utilization=0.7 measured 6% cheaper: less than the 10% one measurement of a config can vary by, "
         "so it is not recommended without testing again." in page

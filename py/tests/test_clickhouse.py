@@ -193,8 +193,8 @@ def test_report_command_writes_the_page_from_stored_telemetry(cfg, tmp_path, mon
 
     page = text_of(out.read_text(encoding="utf-8"))
     # 2 GPUs x $0.50 x the hour less one second the engine was seen for = $1.00; 30 of 60 minutes busy.
-    assert "GPUs cost $1.00 in this window, and $0.50 of it (50%)" in page
-    assert "$0.50 per million tokens" in page  # $1.00 over 2M tokens
+    assert "GPUs cost $1.00 in this window, and $0.500 of it (50%)" in page
+    assert "$0.500 per million tokens" in page  # $1.00 over 2M tokens
     assert "Prefill and decode time" in page and "33%" in page  # split by spans; 1 of 3 requests traced
-    assert "r1 gpu-1 2 × L4 $0.50 1.00 $1.00 50% Time with a request in flight" in page
+    assert "r1 gpu-1 2 × L4 $0.500 1.00 $1.00 50% Time with a request in flight" in page
     assert "L2 , basic counters" in page and "20.0 GiB" in page
