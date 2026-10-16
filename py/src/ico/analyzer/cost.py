@@ -4,7 +4,10 @@ Cost is allocation-based: a replica costs its GPUs times the price per GPU-hour
 for as long as it was there, whether or not it served anything. That cost is
 then cut two ways:
 
-- into active and idle, by the share of time the GPUs did work;
+- into serving and idle, by the share of time the replica had a request to
+  serve. Where the host reports profiling counters, the serving part is cut
+  again: time the compute cores were active, and time they were not although
+  there was work (small batches, waits between engine steps);
 - across the replica's tenants and models, by their share of the work.
 
 Everything here is plain arithmetic over what measure.fetch returned, so it
@@ -20,9 +23,11 @@ from datetime import datetime
 from ico.analyzer.measure import HostGpus, Measurements, Phases, Usage, Window
 from ico.config import Config, ConfigError, Replica
 
-# How a replica's active share was measured.
-BY_PROFILING = "profiling"  # compute cores active, from DCGM
+# How a replica's serving share was measured.
 BY_REQUESTS = "requests"  # time with a request in flight
+# The compute cores were active for longer than the gateway's requests account
+# for: traffic that bypassed the gateway, or records it dropped.
+BY_PROFILING = "profiling"
 
 # How a replica's cost was split across its tenants.
 BY_PHASE_TIME = "phase_time"  # prefill and decode time from engine spans
@@ -43,8 +48,12 @@ class ReplicaCost:
     price_per_gpu_hour: float
     # How long the replica was seen inside the window. It is billed for all of it.
     hours: float
-    active_share: float
-    active_basis: str
+    # Share of the time the replica had at least one request to serve.
+    serving_share: float
+    serving_basis: str
+    # Share of the time the compute cores were active, from DCGM's profiling
+    # counters; None where the host has none, or runs other replicas too.
+    cores_active: float | None
     split_basis: str
     # Share of the replica's requests the engine sent a span for; None without requests.
     span_coverage: float | None
@@ -58,16 +67,28 @@ class ReplicaCost:
         return self.gpu_hours * self.price_per_gpu_hour
 
     @property
-    def active_cost(self) -> float:
-        return self.cost * self.active_share
+    def serving_cost(self) -> float:
+        return self.cost * self.serving_share
 
     @property
     def idle_cost(self) -> float:
-        return self.cost - self.active_cost
+        """Paid for time with nothing to serve."""
+        return self.cost - self.serving_cost
 
     @property
     def idle_gpu_hours(self) -> float:
-        return self.gpu_hours * (1 - self.active_share)
+        return self.gpu_hours * (1 - self.serving_share)
+
+    @property
+    def underused_share(self) -> float | None:
+        """Share of the time there was work but the compute cores were not active; None without profiling counters."""
+        if self.cores_active is None:
+            return None
+        return max(0.0, self.serving_share - self.cores_active)
+
+    @property
+    def underused_cost(self) -> float:
+        return self.cost * (self.underused_share or 0.0)
 
 
 @dataclass(frozen=True)
@@ -76,18 +97,18 @@ class ModelCost:
     gpu_hours: float
     idle_gpu_hours: float
     cost: float
-    active_cost: float
+    serving_cost: float
     requests: int
     prompt_tokens: int
     completion_tokens: int
 
     @property
     def idle_cost(self) -> float:
-        return self.cost - self.active_cost
+        return self.cost - self.serving_cost
 
     @property
-    def active_share(self) -> float:
-        return self.active_cost / self.cost if self.cost else 0.0
+    def serving_share(self) -> float:
+        return self.serving_cost / self.cost if self.cost else 0.0
 
     @property
     def tokens(self) -> int:
@@ -136,12 +157,12 @@ class CostReport:
         return sum(r.cost for r in self.replicas)
 
     @property
-    def active_cost(self) -> float:
-        return sum(r.active_cost for r in self.replicas)
+    def serving_cost(self) -> float:
+        return sum(r.serving_cost for r in self.replicas)
 
     @property
     def idle_cost(self) -> float:
-        return self.cost - self.active_cost
+        return self.cost - self.serving_cost
 
     @property
     def idle_share(self) -> float:
@@ -168,9 +189,23 @@ class CostReport:
         return per_mtok(self.cost, self.tokens)
 
     @property
-    def active_cost_per_mtok(self) -> float | None:
+    def serving_cost_per_mtok(self) -> float | None:
         """What the same tokens would have cost had the GPUs never been idle."""
-        return per_mtok(self.active_cost, self.tokens)
+        return per_mtok(self.serving_cost, self.tokens)
+
+    @property
+    def profiled_cost(self) -> float:
+        """The cost of the replicas whose compute cores were measured."""
+        return sum(r.cost for r in self.replicas if r.cores_active is not None)
+
+    @property
+    def underused_cost(self) -> float:
+        """Paid for time with work to serve while the compute cores were not active, where that was measured."""
+        return sum(r.underused_cost for r in self.replicas)
+
+    @property
+    def underused_share(self) -> float:
+        return self.underused_cost / self.cost if self.cost else 0.0
 
     @property
     def telemetry_level(self) -> int | None:
@@ -208,9 +243,9 @@ def analyze(cfg: Config, window: Window, m: Measurements, *, generated_at: datet
         if host is not None and host.sm_active is not None and not alone:
             notes.append(
                 f"Host {r.host} has profiling counters but runs more than one replica, and the config does not say "
-                f"which GPUs belong to {r.name}. Its active share is taken from request timing instead."
+                f"which GPUs belong to {r.name}. How fully its cores were used while serving cannot be told."
             )
-        active_share, active_basis = _active_share(r, seconds, m, alone)
+        serving_share, serving_basis, cores_active = _serving(r, seconds, m, alone)
         prompt_weight, completion_weight, split_basis = _token_weights(m.phases.get(r.name))
         phases = m.phases.get(r.name)
         replica = ReplicaCost(
@@ -220,8 +255,9 @@ def analyze(cfg: Config, window: Window, m: Measurements, *, generated_at: datet
             gpu_count=r.gpu_count,
             price_per_gpu_hour=cfg.gpu_price_per_hour[r.gpu_model],
             hours=seconds / 3600,
-            active_share=active_share,
-            active_basis=active_basis,
+            serving_share=serving_share,
+            serving_basis=serving_basis,
+            cores_active=cores_active,
             split_basis=split_basis,
             span_coverage=phases.with_span / phases.requests if phases and phases.requests else None,
         )
@@ -249,7 +285,7 @@ def analyze(cfg: Config, window: Window, m: Measurements, *, generated_at: datet
         models=tuple(
             sorted(
                 (
-                    ModelCost(model, s.gpu_hours, s.idle_gpu_hours, s.cost, s.active_cost, s.requests, s.prompt_tokens, s.completion_tokens)
+                    ModelCost(model, s.gpu_hours, s.idle_gpu_hours, s.cost, s.serving_cost, s.requests, s.prompt_tokens, s.completion_tokens)
                     for model, s in models.items()
                 ),
                 key=lambda c: -c.cost,
@@ -274,14 +310,14 @@ class _Sum:
     """Running totals for one model, or one tenant on one model."""
 
     def __init__(self) -> None:
-        self.gpu_hours = self.idle_gpu_hours = self.cost = self.active_cost = 0.0
+        self.gpu_hours = self.idle_gpu_hours = self.cost = self.serving_cost = 0.0
         self.requests = self.errors = self.prompt_tokens = self.completion_tokens = 0
 
     def add(self, replica: ReplicaCost, share: float, usage: Usage | None = None) -> None:
         self.gpu_hours += replica.gpu_hours * share
         self.idle_gpu_hours += replica.idle_gpu_hours * share
         self.cost += replica.cost * share
-        self.active_cost += replica.active_cost * share
+        self.serving_cost += replica.serving_cost * share
         if usage is not None:
             self.requests += usage.requests
             self.errors += usage.errors
@@ -305,16 +341,26 @@ def _seconds_seen(r: Replica, window: Window, m: Measurements) -> float:
     return max(0.0, (last - first).total_seconds())
 
 
-def _active_share(r: Replica, seconds: float, m: Measurements, alone_on_host: bool) -> tuple[float, str]:
+def _serving(r: Replica, seconds: float, m: Measurements, alone_on_host: bool) -> tuple[float, str, float | None]:
+    """The replica's serving share, how it was measured, and how active its compute cores were.
+
+    Serving is time with at least one request in flight. Profiling counters
+    do not measure it: a replica serving one small request at a time keeps
+    most of its cores idle, yet has work. They show how fully the cores were
+    used, and that the replica had work wherever they were busier than the
+    gateway's requests account for.
+    """
     host = m.hosts.get(r.host)
+    cores = None
     # The exporter reports per host. With one replica on the host its cards
     # are that replica's cards; with several the config cannot tell them apart.
     if host is not None and host.sm_active is not None and alone_on_host:
-        return min(max(host.sm_active, 0.0), 1.0), BY_PROFILING
+        cores = min(max(host.sm_active, 0.0), 1.0)
     traffic = m.traffic.get(r.name)
-    if traffic is None or seconds <= 0:
-        return 0.0, BY_REQUESTS
-    return min(traffic.busy_seconds / seconds, 1.0), BY_REQUESTS
+    busy = min(traffic.busy_seconds / seconds, 1.0) if traffic is not None and seconds > 0 else 0.0
+    if cores is not None and cores > busy:
+        return cores, BY_PROFILING, cores
+    return busy, BY_REQUESTS, cores
 
 
 def _token_weights(phases: Phases | None) -> tuple[float, float, str]:

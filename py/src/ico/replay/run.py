@@ -63,12 +63,20 @@ class ConfigResult:
         return self.best is not None and not self.candidate.quality_unverified and self.stage == FULL.number
 
 
+# How much cheaper than the current config a config must measure to be
+# recommended. One measurement of a config varies from run to run: the same
+# config measured twice on an RTX 2060 held rates 8.5% apart. A config that
+# measures less cheaper than this has not shown that it is.
+MIN_SAVING = 0.10
+
+
 @dataclass(frozen=True)
 class RunResult:
     run_id: uuid.UUID
     status: str
     results: tuple[ConfigResult, ...]
     note: str = ""
+    min_saving: float = MIN_SAVING
 
     @property
     def baseline(self) -> ConfigResult | None:
@@ -86,11 +94,35 @@ class RunResult:
 
     @property
     def winner(self) -> ConfigResult | None:
-        """The cheapest config that held the limits. The current config wins ties."""
+        """The config to recommend: the cheapest that held the limits, if it beats the current one by min_saving.
+
+        Otherwise the current config: nothing measured clearly cheaper. When
+        the current config held the limits at no rate, any config that held
+        them is better.
+        """
         contenders = [t for t in self.results if t.can_win]
         if not contenders:
             return None
-        return min(contenders, key=lambda t: (t.cost_per_mtok, not t.is_baseline))
+        cheapest = min(contenders, key=lambda t: (t.cost_per_mtok, not t.is_baseline))
+        current = self.baseline
+        if cheapest.is_baseline or current is None or not current.can_win:
+            return cheapest
+        if cheapest.cost_per_mtok <= current.cost_per_mtok * (1 - self.min_saving):
+            return cheapest
+        return current
+
+    @property
+    def close_calls(self) -> tuple[ConfigResult, ...]:
+        """Configs that measured cheaper than the current one, but by less than min_saving."""
+        current, winner = self.baseline, self.winner
+        if current is None or not current.can_win or winner is not current:
+            return ()
+        return tuple(
+            sorted(
+                (t for t in self.results if t.can_win and not t.is_baseline and t.cost_per_mtok < current.cost_per_mtok),
+                key=lambda t: t.cost_per_mtok,
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -108,6 +140,8 @@ class Settings:
     single_replica: bool = False
     assume_yes: bool = False
     health_timeout_s: float = 900.0
+    # How much cheaper a config must measure to be recommended; see MIN_SAVING.
+    min_saving: float = MIN_SAVING
     idle_timeout_s: float = 300.0
 
 
@@ -197,7 +231,7 @@ class Replay:
             if self.watchdog is not None:
                 self.watchdog.done()
 
-        return RunResult(self.run_id, status, tuple(results), note)
+        return RunResult(self.run_id, status, tuple(results), note, min_saving=self.settings.min_saving)
 
     def _check_replica(self) -> None:
         s = self.settings

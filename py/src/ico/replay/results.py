@@ -14,7 +14,7 @@ from ico.replay.run import FAILED_TO_START, RULED_OUT, SKIPPED, RunResult, Confi
 
 RUNS_COLUMNS = (
     "run_id", "trigger", "mode", "replica", "window_start", "window_end",
-    "slo", "budget_s", "started_at", "finished_at", "status", "note",
+    "slo", "budget_s", "started_at", "finished_at", "status", "note", "min_saving",
 )  # fmt: skip
 RESULTS_COLUMNS = (
     "run_id", "config_id", "stage", "config", "rate_rps", "tokens_s", "ttft_p95_ms", "itl_p95_ms",
@@ -26,28 +26,30 @@ MODE = "recorded_shape"
 
 
 def record_start(
-    client: Client, run_id: uuid.UUID, *, trigger: str, replica: str, window: Window, limits: Limits, budget_s: float, started_at: datetime
-) -> None:
-    client.insert("replay_runs", [_run_row(run_id, trigger, replica, window, limits, budget_s, started_at, None, "running", "")], column_names=RUNS_COLUMNS)
+    client: Client, run_id: uuid.UUID, *, trigger: str, replica: str, window: Window, limits: Limits, budget_s: float,
+    started_at: datetime, min_saving: float,
+) -> None:  # fmt: skip
+    row = _run_row(run_id, trigger, replica, window, limits, budget_s, started_at, None, "running", "", min_saving)
+    client.insert("replay_runs", [row], column_names=RUNS_COLUMNS)
 
 
 def record_finish(
-    client: Client, result: RunResult, *, trigger: str, replica: str, window: Window, limits: Limits, budget_s: float, started_at: datetime, finished_at: datetime
-) -> None:
+    client: Client, result: RunResult, *, trigger: str, replica: str, window: Window, limits: Limits, budget_s: float,
+    started_at: datetime, finished_at: datetime, min_saving: float,
+) -> None:  # fmt: skip
     # replay_runs keeps the last row written per run, so the finished row replaces the running one.
-    client.insert(
-        "replay_runs",
-        [_run_row(result.run_id, trigger, replica, window, limits, budget_s, started_at, finished_at, result.status, result.note)],
-        column_names=RUNS_COLUMNS,
+    row = _run_row(
+        result.run_id, trigger, replica, window, limits, budget_s, started_at, finished_at, result.status, result.note, min_saving
     )
+    client.insert("replay_runs", [row], column_names=RUNS_COLUMNS)
     if result.results:
         winner = result.winner
         client.insert("replay_results", [_result_row(result.run_id, t, t is winner) for t in result.results], column_names=RESULTS_COLUMNS)
 
 
-def _run_row(run_id, trigger, replica, window, limits, budget_s, started_at, finished_at, status, note):
+def _run_row(run_id, trigger, replica, window, limits, budget_s, started_at, finished_at, status, note, min_saving):
     slo = json.dumps({"ttft_p95_ms": limits.ttft_p95_ms, "itl_p95_ms": limits.itl_p95_ms})
-    return (run_id, trigger, MODE, replica, window.since, window.until, slo, int(budget_s), started_at, finished_at, status, note)
+    return (run_id, trigger, MODE, replica, window.since, window.until, slo, int(budget_s), started_at, finished_at, status, note, min_saving)
 
 
 def _finite(value: float) -> float:
@@ -105,6 +107,16 @@ def summary(result: RunResult) -> str:
     lines.append("")
     if winner is None:
         lines.append("No config held the latency limits at any rate tried.")
+    elif winner.is_baseline and result.close_calls:
+        lines.append(
+            f"No config was clearly cheaper than the current one (${winner.cost_per_mtok:.4f} per million tokens at {winner.best.rate_rps:.2f} requests/s)."
+        )
+        for t in result.close_calls:
+            saved = 1 - t.cost_per_mtok / winner.cost_per_mtok
+            lines.append(
+                f"{t.candidate.id} measured {saved:.0%} cheaper: less than the {result.min_saving:.0%} one measurement can vary by, "
+                "so it is not recommended without testing it again."
+            )
     elif winner.is_baseline:
         lines.append(f"The current config is the cheapest of those tested: ${winner.cost_per_mtok:.4f} per million tokens at {winner.best.rate_rps:.2f} requests/s.")
     else:

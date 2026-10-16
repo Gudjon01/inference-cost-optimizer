@@ -50,13 +50,13 @@ def test_allocation_cost_bills_idle_time():
     )
     [r] = report.replicas
     assert (r.gpu_hours, r.cost) == (48, 96)
-    assert (r.active_share, r.active_basis) == (0.25, BY_REQUESTS)
-    assert (r.active_cost, r.idle_cost, r.idle_gpu_hours) == (24, 72, 36)
+    assert (r.serving_share, r.serving_basis) == (0.25, BY_REQUESTS)
+    assert (r.serving_cost, r.idle_cost, r.idle_gpu_hours) == (24, 72, 36)
 
     assert (report.cost, report.idle_cost, report.idle_share) == (96, 72, 0.75)
     assert report.tokens == 4_000_000
     assert report.cost_per_mtok == 24  # $96 over 4M tokens
-    assert report.active_cost_per_mtok == 6  # what it would be with no idle time
+    assert report.serving_cost_per_mtok == 6  # what it would be with no idle time
 
 
 def test_a_replica_is_billed_only_for_the_time_it_was_seen():
@@ -80,17 +80,51 @@ def test_gaps_between_signs_of_life_are_billed():
     assert report.replicas[0].hours == 24
 
 
-def test_profiling_counters_decide_the_active_share_when_present():
+def test_idle_is_time_with_nothing_to_serve_even_where_profiling_counters_are():
+    # Requests in flight half the day; the compute cores active a fifth of it.
     usage = [Usage("r1", "m", "acme", 1, 0, 100, 100)]
-    traffic = {"r1": Traffic(12 * 3600, WHOLE_DAY)}  # request timing would say 50%
+    traffic = {"r1": Traffic(12 * 3600, WHOLE_DAY)}
 
-    with_profiling = run(cfg(replica()), measurements(usage=usage, traffic=traffic, hosts={"gpu-1": host(level=3, sm_active=0.2)}))
-    assert (with_profiling.replicas[0].active_share, with_profiling.replicas[0].active_basis) == (0.2, BY_PROFILING)
-    assert with_profiling.telemetry_level == 3
+    report = run(cfg(replica()), measurements(usage=usage, traffic=traffic, hosts={"gpu-1": host(level=3, sm_active=0.2)}))
+    [r] = report.replicas
+    assert (r.serving_share, r.serving_basis, r.cores_active) == (0.5, BY_REQUESTS, 0.2)
+    # $96: half of it idle, and of the serving half, 30 points of the day had work but idle cores.
+    assert (r.idle_cost, r.underused_share) == (48, pytest.approx(0.3))
+    assert (report.idle_share, report.underused_cost, report.profiled_cost) == (0.5, pytest.approx(28.8), 96)
+    assert report.telemetry_level == 3
 
     without = run(cfg(replica()), measurements(usage=usage, traffic=traffic, hosts={"gpu-1": host(level=2)}))
-    assert (without.replicas[0].active_share, without.replicas[0].active_basis) == (0.5, BY_REQUESTS)
+    [r] = without.replicas
+    assert (r.serving_share, r.serving_basis, r.cores_active, r.underused_share) == (0.5, BY_REQUESTS, None, None)
+    assert (without.underused_cost, without.profiled_cost) == (0, 0)
     assert without.telemetry_level == 2
+
+
+def test_the_h100_run_was_little_idle_but_its_cores_were_not_fully_used():
+    # Roughly the H100 run of 2026-10-14: requests in flight 887 of about 952
+    # billed seconds, the cores active 85.3% of the time. The report used to
+    # call all 14.7% left idle time; under half of it was, and the rest was
+    # serving with cores that had nothing to run.
+    report = run(
+        cfg(replica()),
+        measurements(
+            usage=[Usage("r1", "m", "acme", 1, 0, 100, 100)],
+            traffic={"r1": Traffic(887 / 952 * 24 * 3600, WHOLE_DAY)},
+            hosts={"gpu-1": host(level=3, sm_active=0.853)},
+        ),
+    )
+    assert report.idle_share == pytest.approx(0.068, abs=0.001)
+    assert report.underused_share == pytest.approx(0.079, abs=0.001)
+
+
+def test_cores_busier_than_the_requests_show_mean_there_was_work():
+    # Traffic the gateway did not see, such as a replay sent straight to the engine.
+    report = run(
+        cfg(replica()),
+        measurements(traffic={"r1": Traffic(6 * 3600, WHOLE_DAY)}, hosts={"gpu-1": host(level=3, sm_active=0.6)}),
+    )
+    [r] = report.replicas
+    assert (r.serving_share, r.serving_basis, r.underused_share) == (0.6, BY_PROFILING, 0)
 
 
 def test_two_replicas_on_one_host_fall_back_to_request_timing():
@@ -102,7 +136,9 @@ def test_two_replicas_on_one_host_fall_back_to_request_timing():
             hosts={"gpu-1": host(level=3, sm_active=0.9)},
         ),
     )
-    assert [(r.active_share, r.active_basis) for r in report.replicas] == [(0.25, BY_REQUESTS), (0.75, BY_REQUESTS)]
+    assert [(r.serving_share, r.serving_basis, r.cores_active) for r in report.replicas] == [
+        (0.25, BY_REQUESTS, None), (0.75, BY_REQUESTS, None)
+    ]
     assert sum("more than one replica" in note for note in report.notes) == 2
 
 
@@ -159,10 +195,10 @@ def test_models_carry_their_replicas_including_idle_ones():
         ),
     )
     by_model = {m.model: m for m in report.models}
-    assert (by_model["big-model"].cost, by_model["big-model"].active_share) == (96, 0.5)
+    assert (by_model["big-model"].cost, by_model["big-model"].serving_share) == (96, 0.5)
     # The spare replica served nothing: all idle, charged to the model it was there for.
     spare = by_model["small-model"]
-    assert (spare.cost, spare.active_cost, spare.idle_gpu_hours, spare.tokens) == (96, 0, 48, 0)
+    assert (spare.cost, spare.serving_cost, spare.idle_gpu_hours, spare.tokens) == (96, 0, 48, 0)
     assert spare.cost_per_mtok is None
     # No tenant used it, so its cost shows up unassigned and the table still adds up.
     unassigned = next(t for t in report.tenants if t.tenant is None)
@@ -179,7 +215,7 @@ def test_one_model_on_two_replicas_adds_up():
         ),
     )
     [m] = report.models
-    assert (m.cost, m.active_cost, m.gpu_hours, m.idle_gpu_hours) == (192, 144, 96, 24)
+    assert (m.cost, m.serving_cost, m.gpu_hours, m.idle_gpu_hours) == (192, 144, 96, 24)
     [t] = report.tenants
     assert (t.cost, t.cost_per_mtok) == (192, 96)
 

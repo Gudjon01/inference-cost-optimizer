@@ -71,10 +71,24 @@ def test_report_names_how_each_number_was_measured():
         phases={"r1": Phases(40, 30, 3_000, 9_000, 3_000, 1_000)},
     )
     page = text_of(report.render(with_spans))
-    assert "Compute cores active (DCGM profiling)" in page
+    # The cores were active 40% of the day, requests in flight only 25% of it:
+    # the replica had work the gateway did not see.
+    assert "Compute cores active, longer than requests were in flight" in page
     assert "Prefill and decode time" in page
     assert "L3 , profiling counters" in page
     assert "75%" in page  # 30 of 40 requests traced
+
+
+def test_with_profiling_counters_idle_time_and_unused_cores_are_told_apart():
+    # $96: requests in flight 18 of 24 hours, the compute cores active 12 of them.
+    profiled = sample_report(traffic={"r1": Traffic(18 * 3600, WHOLE_DAY)}, hosts={"gpu-1": host(level=3, sm_active=0.5)})
+    page = text_of(report.render(profiled))
+    assert "and $24.00 of it (25%) paid for time with nothing to serve." in page
+    assert "Another $24.00 (25%) paid for compute cores that had nothing to run while requests were being served." in page
+    assert "75% Time with a request in flight 25%" in page, "serving share, how it was measured, cores unused while serving"
+
+    without = text_of(report.render(sample_report()))
+    assert "Another" not in without, "without profiling counters there is nothing to say about the cores"
 
 
 def test_report_is_one_self_contained_file():
@@ -161,6 +175,20 @@ def test_report_says_when_the_current_config_already_wins_or_nothing_held():
     nothing = replace(run, configs=(run.configs[4],))
     assert "No config held the latency limits at any rate tried." in text_of(report.render(sample_report(), [nothing]))
     assert "Replay on" not in text_of(report.render(sample_report())), "no replay, no section"
+
+
+def test_report_says_when_a_cheaper_config_is_within_the_margin():
+    from dataclasses import replace
+
+    run = replay_run(min_saving=0.10)
+    # 0.0085 against the current 0.0090: 6% cheaper. FP8 and the short run are cheaper too, but cannot win.
+    near = replace(run, configs=(replace(run.configs[0], is_winner=True), replace(run.configs[1], is_winner=False, cost_per_mtok=0.0085), *run.configs[2:]))
+    page = text_of(report.render(sample_report(), [near]))
+    assert "No config was clearly cheaper than the current one, at $0.0090 per million tokens at full load." in page
+    assert (
+        "gpu-memory-utilization=0.7 measured 6% cheaper: less than the 10% one measurement of a config can vary by, "
+        "so it is not recommended without testing again." in page
+    )
 
 
 def test_long_tenant_lists_fold_into_one_row_that_keeps_the_total():

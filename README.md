@@ -142,10 +142,12 @@ docker compose cp collector:/tmp/report.html report.html
 elsewhere. It shows, for the window:
 
 - cost per million tokens, and what it would be without idle time;
-- active and idle cost per model, and idle GPU-hours;
+- serving and idle cost per model, and idle GPU-hours;
+- where the GPUs report profiling counters, what was paid for compute cores
+  that had nothing to run while requests were being served;
 - the split of each replica's cost across tenants;
-- the latest replay of each replica: the current config against the cheapest
-  one that held the latency limits;
+- the replay run on that traffic: the current config against the cheapest one
+  that held the latency limits;
 - the telemetry level of each host, and the inputs every number came from.
 
 How the numbers are made:
@@ -153,9 +155,13 @@ How the numbers are made:
 - **Cost** is GPUs x price x hours, from the first to the last sign of a
   replica in the window. Idle hours are billed like any other. Prices come
   from `gpu_price_per_hour` in the config.
-- **Active share** is the share of time the compute cores were active where
-  the host has DCGM profiling counters, and otherwise the share of time with
-  at least one request in flight.
+- **Idle** is time with no request in flight: paid for, nothing to serve.
+  The rest is **serving** time.
+- **Cores unused while serving** is serving time minus the time DCGM's
+  profiling counters show the compute cores active, on hosts that report them
+  and run one replica. Requests were in flight, but part of the cores had
+  nothing to run: small batches, waits between engine steps. On the H100 run,
+  6% of the cost was idle and another 9% paid for unused cores.
 - **Tenant split** follows engine time where spans report prefill and decode
   time, so prompt and completion tokens weigh what they took. Otherwise it
   follows token count.
@@ -195,6 +201,12 @@ What a run does, in order:
    included, is measured on a freshly started engine, so they are compared
    under the same conditions.
 6. Restores the original flags and undrains the replica.
+
+A config is recommended only if it measures at least 10% cheaper than the
+current one (`--min-saving`). One measurement of a config varies from run to
+run: the same config measured twice on the RTX 2060 held rates 8.5% apart.
+Configs that measure cheaper by less are listed as within that variation, not
+as savings.
 
 Once the current config is measured it knows how long a load and a test take,
 prints its plan, and waits for a yes (`--yes` skips it). When a full test of

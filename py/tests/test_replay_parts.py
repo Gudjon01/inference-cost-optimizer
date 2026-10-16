@@ -27,6 +27,19 @@ def write(tmp_path, text):
     return path
 
 
+def test_the_margin_is_read_as_a_share():
+    import click
+
+    from ico.cli import parse_share
+
+    assert parse_share("10%") == pytest.approx(0.10)
+    assert parse_share("0.05") == pytest.approx(0.05)
+    assert parse_share("0%") == 0
+    for bad in ("ten", "100%", "1.5", "-5%"):
+        with pytest.raises(click.BadParameter):
+            parse_share(bad)
+
+
 def test_flags_render_as_a_command_line():
     flags = {"max-num-seqs": 128, "enable-prefix-caching": True, "enable-log-requests": False, "model": "org/name with space"}
     assert sweep.render(flags) == "--max-num-seqs 128 --enable-prefix-caching --no-enable-log-requests --model 'org/name with space'"

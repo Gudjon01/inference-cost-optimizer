@@ -102,7 +102,7 @@
 {% else %}
 {% if report.cost_per_mtok is not none %}
 <p class="hero">{{ report.cost_per_mtok | money }} <small>per million tokens</small></p>
-<p class="lead">GPUs cost {{ report.cost | money }} in this window, and {{ report.idle_cost | money }} of it ({{ report.idle_share | percent }}) paid for time with nothing to serve. Without idle time the same tokens would have cost {{ report.active_cost_per_mtok | money }} per million.</p>
+<p class="lead">GPUs cost {{ report.cost | money }} in this window, and {{ report.idle_cost | money }} of it ({{ report.idle_share | percent }}) paid for time with nothing to serve.{% if report.profiled_cost %} Another {{ report.underused_cost | money }} ({{ report.underused_share | percent }}) paid for compute cores that had nothing to run while requests were being served.{% endif %} Without idle time the same tokens would have cost {{ report.serving_cost_per_mtok | money }} per million.</p>
 {% else %}
 <p class="hero">{{ report.cost | money }} <small>spent, no tokens served</small></p>
 <p class="lead">The GPUs were up for {{ report.gpu_hours | hours }} GPU-hours in this window and served no tokens through the gateway.</p>
@@ -134,7 +134,7 @@
 <section>
   <h2>Cost by model</h2>
   <p class="sub">A model carries the cost of the replicas that serve it, idle time included.</p>
-  <div class="key"><span>Active: GPUs doing work</span><span class="rest">Idle: paid for, nothing to serve</span></div>
+  <div class="key"><span>Serving: requests in flight</span><span class="rest">Idle: paid for, nothing to serve</span></div>
   <div class="card">
     <table>
       <thead>
@@ -142,7 +142,7 @@
           <th>Model</th>
           <th class="n">GPU-hours</th>
           <th class="n">Cost</th>
-          <th>Active share</th>
+          <th>Serving share</th>
           <th class="n">Idle cost</th>
           <th class="n">Idle GPU-hours</th>
           <th class="n">Prompt tokens</th>
@@ -157,9 +157,9 @@
           <td class="n">{{ m.gpu_hours | hours }}</td>
           <td class="n">{{ m.cost | money }}</td>
           <td>
-            <div class="gauge" title="Active {{ m.active_cost | money }}, idle {{ m.idle_cost | money }}">
-              <div class="meter" role="meter" aria-label="Active share of cost" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (m.active_share * 100) | round | int }}"><i style="width: {{ (m.active_share * 100) | round(1) }}%"></i></div>
-              <span class="n">{{ m.active_share | percent }}</span>
+            <div class="gauge" title="Serving {{ m.serving_cost | money }}, idle {{ m.idle_cost | money }}">
+              <div class="meter" role="meter" aria-label="Serving share of cost" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (m.serving_share * 100) | round | int }}"><i style="width: {{ (m.serving_share * 100) | round(1) }}%"></i></div>
+              <span class="n">{{ m.serving_share | percent }}</span>
             </div>
           </td>
           <td class="n">{{ m.idle_cost | money }}</td>
@@ -254,8 +254,9 @@
           <th class="n">Per GPU-hour</th>
           <th class="n">Hours seen</th>
           <th class="n">Cost</th>
-          <th>Active share</th>
-          <th>Active measured by</th>
+          <th>Serving share</th>
+          <th>Serving measured by</th>
+          <th class="n">Cores unused while serving</th>
           <th>Tenants split by</th>
           <th class="n">Requests traced</th>
         </tr>
@@ -270,12 +271,13 @@
           <td class="n">{{ r.hours | hours }}</td>
           <td class="n">{{ r.cost | money }}</td>
           <td>
-            <div class="gauge" title="Active {{ r.active_cost | money }}, idle {{ r.idle_cost | money }}">
-              <div class="meter" role="meter" aria-label="Active share of time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (r.active_share * 100) | round | int }}"><i style="width: {{ (r.active_share * 100) | round(1) }}%"></i></div>
-              <span class="n">{{ r.active_share | percent }}</span>
+            <div class="gauge" title="Serving {{ r.serving_cost | money }}, idle {{ r.idle_cost | money }}">
+              <div class="meter" role="meter" aria-label="Serving share of time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (r.serving_share * 100) | round | int }}"><i style="width: {{ (r.serving_share * 100) | round(1) }}%"></i></div>
+              <span class="n">{{ r.serving_share | percent }}</span>
             </div>
           </td>
-          <td class="name">{{ active_basis[r.active_basis] }}</td>
+          <td class="name">{{ serving_basis[r.serving_basis] }}</td>
+          <td class="n">{% if r.underused_share is none %}n/a{% else %}{{ r.underused_share | percent }}{% endif %}</td>
           <td class="name">{{ split_basis[r.split_basis] }}</td>
           <td class="n">{% if r.span_coverage is none %}n/a{% else %}{{ r.span_coverage | percent }}{% endif %}</td>
         </tr>
@@ -293,6 +295,9 @@
   <p class="lead">No config held the latency limits at any rate tried.</p>
   {% elif run.saving is not none %}
   <p class="lead">{{ run.winner.config_id }} serves a million tokens for {{ run.winner.cost_per_mtok | money }} at full load, {{ run.saving | percent }} below the {{ run.current.cost_per_mtok | money }} of the current config.</p>
+  {% elif run.close_calls %}
+  <p class="lead">No config was clearly cheaper than the current one, at {{ run.winner.cost_per_mtok | money }} per million tokens at full load.</p>
+  <p class="sub">{% for c in run.close_calls %}{{ c.config_id }} measured {{ run.below_current(c) | percent }} cheaper{% if not loop.last %}, {% endif %}{% endfor %}: less than the {{ run.min_saving | percent }} one measurement of a config can vary by, so {% if run.close_calls | length > 1 %}they are{% else %}it is{% endif %} not recommended without testing again.</p>
   {% else %}
   <p class="lead">The current config is the cheapest of those tested: {{ run.winner.cost_per_mtok | money }} per million tokens at full load.</p>
   {% endif %}
@@ -384,8 +389,10 @@
       <dd>{% for model, price in report.gpu_price_per_hour.items() %}{{ model }} at {{ price | money }} per GPU-hour{% if not loop.last %}; {% endif %}{% endfor %}, from the config file</dd>
       <dt>Cost</dt>
       <dd>GPUs × price × hours seen. Idle hours are billed like any other.</dd>
-      <dt>Active share</dt>
-      <dd>Compute cores active where the host reports profiling counters; otherwise the share of time with at least one request in flight.</dd>
+      <dt>Serving share</dt>
+      <dd>The share of time with at least one request in flight. Where profiling counters show the compute cores active for longer, as with traffic that bypassed the gateway, the cores' active time.</dd>
+      <dt>Cores unused while serving</dt>
+      <dd>Where a host reports profiling counters and runs one replica: the serving share minus the share of time its compute cores were active. Requests were in flight, but part of the cores had nothing to run, as with small batches or waits between engine steps.</dd>
       <dt>Tenant split</dt>
       <dd>By engine time where spans report prefill and decode time, so prompt and completion tokens weigh what they took; otherwise by token count.</dd>
       {% if report.notes %}
