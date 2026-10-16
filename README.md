@@ -5,7 +5,7 @@ cost per million tokens, how much of that pays for idle GPUs, and which engine
 config serves the same traffic for less, tested on a replay of your own
 traffic, on your own machines.
 
-Documentation: [www.inference-cost-optimizer.com](https://www.inference-cost-optimizer.com).
+Documentation: [inference-cost-optimizer.com](https://inference-cost-optimizer.com).
 
 **From a real run.** An RTX 2060 serves Qwen3-0.6B on vLLM, capped at
 `--max-num-seqs 8`. `ico replay` took five minutes of traffic the gateway had
@@ -105,7 +105,7 @@ scripts/   Toolchain wrappers
 
 This runs everything on one machine. To install on rented GPU machines, with
 ClickHouse and the collector on a separate small host, follow the
-[install guide](https://www.inference-cost-optimizer.com/install/overview).
+[install guide](https://inference-cost-optimizer.com/install/overview).
 
 Needs Docker and git. Take the latest release:
 
