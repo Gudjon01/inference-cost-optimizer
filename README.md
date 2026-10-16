@@ -46,11 +46,11 @@ prompts are synthetic, rebuilt from token counts and prefix hashes.
 ## Status
 
 Works today with vLLM on NVIDIA GPUs, deployed with Docker Compose or as plain
-processes. It has run on real hardware twice:
+processes. It has run on real hardware on two cards:
 
 | | Engine | GPU telemetry | What ran |
 | --- | --- | --- | --- |
-| H100 SXM, RunPod, 2026-10-14 | vLLM 0.31.0, Qwen3-8B | dcgm-exporter 4.5.2-4.8.1, with profiling counters (level L3) | 16 minutes of four simulated tenants, the report, and a 20-minute replay |
+| H100 SXM, RunPod, 2026-10-14 and 16 | vLLM 0.31.0, Qwen3-8B | dcgm-exporter 4.5.2-4.8.1, with profiling counters (level L3) | 16 minutes of four simulated tenants, the report, and two 20-minute replays of that traffic |
 | GeForce RTX 2060 | vLLM 0.10.1.1, Qwen3-0.6B | nvidia_gpu_exporter 1.15.1 (level L2) | Recorded traffic, the report, and the replays above |
 
 On the H100, everything the 2060 could not show worked: DCGM's profiling
@@ -64,12 +64,25 @@ the hand-written one.
 Still to check on real hardware: successive halving. On the H100, a full test
 of the configs fit the budget, so the replay never needed it.
 
-The H100 run also found a bug in the replay. It rebuilt each conversation's own
-history the same on every pass through its sample, so from the second pass on
-nearly every prompt was a prefix-cache hit: 84% by vLLM's count, against
-38-50% on the live traffic. It measured the current config at 43 requests/s,
-where the live traffic was comfortable at about 22 and queued near 28. #5
-fixes it; the replay's H100 numbers need measuring again.
+The first H100 replay found a bug in the replay itself. It rebuilt each
+conversation's own history the same on every pass through its sample, so from
+the second pass on nearly every prompt was a prefix-cache hit: 84% by vLLM's
+count, against 38-50% on the live traffic, and the current config measured 43
+requests/s. With the fix (#5), the same recorded traffic replayed two days
+later kept the cache at 36-39% and gave:
+
+| Config, on the H100 | Requests/s within the limits | Per million tokens |
+| --- | ---: | ---: |
+| vLLM's defaults, the current config | 22.5 | $0.0237 |
+| `--max-num-batched-tokens 16384` | 22.5 | $0.0237 |
+| `--max-num-batched-tokens 2048` | 22.5 | $0.0237 |
+| `--kv-cache-dtype fp8`, quality unverified | 22.5 | $0.0237 |
+| `--no-enable-prefix-caching` | 15.9 | $0.0335 |
+
+The live traffic had been comfortable at about 22 requests/s and queued near
+28, so the replay now agrees with it. On this traffic vLLM's defaults were
+already the cheapest config that holds, and turning off the prefix cache would
+make each token 41% dearer. Same limits as above, at $3.99 per GPU-hour.
 
 Not built yet: SGLang and AMD adapters, Kubernetes and Helm, live-mirror
 replay, and a check of answer quality. Until that check exists, configs that
