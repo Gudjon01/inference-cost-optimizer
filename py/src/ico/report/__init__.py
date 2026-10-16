@@ -31,16 +31,20 @@ LEVELS = {
 
 
 def money(x: float | None) -> str:
-    """Dollars at a precision that fits the size: $1,234, $12.34, $0.012."""
+    """Dollars to the cent, and below a dollar to three significant digits: $1,234.50, $12.34, $0.0237.
+
+    Three digits keep a difference of about one percent visible, such as
+    between two configs a replay compares: $0.0124 and $0.0119, not $0.012
+    twice.
+    """
     if x is None:
         return "n/a"
     size = abs(x)
-    if size >= 1000:
-        return f"${x:,.0f}"
     if size >= 1 or size == 0:
         return f"${x:,.2f}"
-    # Below a dollar, keep two significant digits and never fewer than cents.
-    return f"${x:.{max(2, 1 - math.floor(math.log10(size)))}f}"
+    shown = f"{x:.{2 - math.floor(math.log10(size))}f}"
+    # 0.9996 at three significant digits is 1.000: a dollar, shown as one.
+    return f"${x:,.2f}" if abs(float(shown)) >= 1 else f"${shown}"
 
 
 def count(n: float) -> str:
