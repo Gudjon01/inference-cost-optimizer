@@ -181,6 +181,30 @@ def test_the_current_config_wins_when_nothing_is_cheaper():
     assert result.winner.is_baseline, "a tie goes to what already runs: no reason to change"
 
 
+def test_a_config_only_a_little_cheaper_is_a_close_call_not_a_winner():
+    from ico.replay.results import summary
+
+    # 68 seqs hold 4.25 requests/s against 64's 4: 6% cheaper, less than one
+    # measurement of a config varies by.
+    result = replay(World()).run([candidate(68)])
+    current, near = result.results
+    assert result.winner is current and result.close_calls == (near,)
+    text = summary(result)
+    assert "No config was clearly cheaper than the current one" in text
+    assert "max-num-seqs=68 measured 6% cheaper: less than the 10% one measurement can vary by" in text
+
+
+def test_a_config_cheaper_by_the_margin_wins():
+    # 72 seqs hold 4.5 requests/s: 11% cheaper than the current config.
+    result = replay(World()).run([candidate(68), candidate(72)])
+    assert result.winner.candidate.id == "max-num-seqs=72" and result.close_calls == ()
+
+
+def test_the_margin_is_a_setting():
+    result = replay(World(), min_saving=0.05).run([candidate(68)])
+    assert result.winner.candidate.id == "max-num-seqs=68"
+
+
 def test_a_config_that_changes_precision_is_measured_but_cannot_win():
     world = World()
     result = replay(world).run([candidate(128), candidate(128, quantization="fp8")])

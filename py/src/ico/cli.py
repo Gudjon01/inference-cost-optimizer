@@ -122,6 +122,17 @@ def parse_slo(text: str, defaults: config_module.Slo) -> tuple[float, float]:
     return limits["ttft_p95"], limits["itl_p95"]
 
 
+def parse_share(text: str) -> float:
+    """A share such as ``10%`` or ``0.1``, between 0 and 1."""
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(%?)\s*", text)
+    if not match:
+        raise click.BadParameter("give a share like 10%")
+    share = float(match.group(1)) / (100 if match.group(2) else 1)
+    if not 0 <= share < 1:
+        raise click.BadParameter("give a share from 0% up to, but not including, 100%")
+    return share
+
+
 @main.command()
 @config_option
 @click.option("--replica", "replica_name", required=True, help="The replica to drain and test.")
@@ -136,6 +147,12 @@ def parse_slo(text: str, defaults: config_module.Slo) -> tuple[float, float]:
 @click.option("--until", default=None, help="Where the window ends, as an ISO time (UTC unless it says otherwise). Default: now.")
 @click.option("--slo", default="", help="Latency limits a config must hold, like ttft_p95=500ms,itl_p95=50ms. Default: those in the config file.")
 @click.option("--budget", default="45m", show_default=True, help="Time the whole run may take, restore included.")
+@click.option(
+    "--min-saving",
+    default="10%",
+    show_default=True,
+    help="How much cheaper than the current config a config must measure to be recommended.",
+)
 @click.option("--single-replica", is_flag=True, help="Accept downtime: go ahead although this is the only replica taking traffic.")
 @click.option("--yes", "assume_yes", is_flag=True, help="Do not wait for a yes after the plan is printed.")
 @click.option("--replica-url", default=None, help="Where this machine reaches the engine, if not at the url in the config file.")
@@ -145,7 +162,7 @@ def parse_slo(text: str, defaults: config_module.Slo) -> tuple[float, float]:
 @click.option("--min-step-requests", default=40, show_default=True, help="Fewest requests a rate is judged on, however low the rate.")
 def replay(
     config_path: Path, replica_name: str, sweep_path: Path, window: str, until: str | None, slo: str, budget: str,
-    single_replica: bool, assume_yes: bool, replica_url: str | None, sample_requests: int,
+    min_saving: str, single_replica: bool, assume_yes: bool, replica_url: str | None, sample_requests: int,
     health_timeout: str, step_seconds: float, min_step_requests: int,
 ) -> None:  # fmt: skip
     """Test engine configs on recorded traffic and name the cheapest that holds the latency limits.
@@ -179,6 +196,7 @@ def replay(
     end = parse_moment(until) if until else now
     span = measure.Window(end - parse_window(window), end)
     limits = Limits(*parse_slo(slo, cfg.slo))
+    saving = parse_share(min_saving)
     settings = RampSettings(
         step_seconds=step_seconds,
         min_requests=min_step_requests,
@@ -284,6 +302,7 @@ def replay(
             single_replica=single_replica,
             assume_yes=assume_yes,
             health_timeout_s=health_timeout_s,
+            min_saving=saving,
         ),
         original=original,
         admin=GatewayAdmin(cfg.gateway.admin_url, token),
@@ -295,12 +314,14 @@ def replay(
         confirm=lambda question: click.confirm(question, default=False),
         watchdog=dog,
     )
-    record = dict(trigger="cli", replica=replica.name, window=span, limits=limits, budget_s=budget_s, started_at=now)
+    record = dict(
+        trigger="cli", replica=replica.name, window=span, limits=limits, budget_s=budget_s, started_at=now, min_saving=saving
+    )
     results.record_start(client, replay_run.run_id, **record)
     try:
         outcome = replay_run.run(to_test, ruled_out)
     except (run.ReplayError, GatewayError) as e:
-        failed = run.RunResult(replay_run.run_id, run.FAILED, (), str(e))
+        failed = run.RunResult(replay_run.run_id, run.FAILED, (), str(e), min_saving=saving)
         results.record_finish(client, failed, **record, finished_at=datetime.now(timezone.utc))
         raise click.ClickException(str(e)) from None
     results.record_finish(client, outcome, **record, finished_at=datetime.now(timezone.utc))

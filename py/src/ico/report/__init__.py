@@ -15,9 +15,9 @@ from ico.analyzer.replays import ReplayRun
 # Past this many rows the smallest tenants are folded into one line.
 MAX_TENANT_ROWS = 100
 
-ACTIVE_BASIS = {
-    BY_PROFILING: "Compute cores active (DCGM profiling)",
+SERVING_BASIS = {
     BY_REQUESTS: "Time with a request in flight",
+    BY_PROFILING: "Compute cores active, longer than requests were in flight",
 }
 SPLIT_BASIS = {
     BY_PHASE_TIME: "Prefill and decode time",
@@ -116,7 +116,7 @@ def render(report: CostReport, replays: Sequence[ReplayRun] = ()) -> str:
         tenants=shown,
         folded=_fold(folded),
         folded_count=len(folded),
-        active_basis=ACTIVE_BASIS,
+        serving_basis=SERVING_BASIS,
         split_basis=SPLIT_BASIS,
         levels=LEVELS,
     )

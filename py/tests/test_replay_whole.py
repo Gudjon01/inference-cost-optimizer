@@ -306,8 +306,11 @@ def test_replay_command_end_to_end(install, tmp_path, monkeypatch):
         assert [c for c in install.admin_calls if c.startswith("POST")] == ["POST /admin/replicas/r1/drain", "POST /admin/replicas/r1/undrain"]
 
         # What it left in ClickHouse.
-        runs = client.query("SELECT status, replica, mode, trigger, budget_s, isNotNull(finished_at) FROM replay_runs FINAL").result_rows
-        assert runs == [("finished", "r1", "recorded_shape", "cli", 600, 1)]
+        runs = client.query(
+            "SELECT status, replica, mode, trigger, budget_s, isNotNull(finished_at), min_saving FROM replay_runs FINAL"
+        ).result_rows
+        assert [row[:6] for row in runs] == [("finished", "r1", "recorded_shape", "cli", 600, 1)]
+        assert runs[0][6] == pytest.approx(0.1), "the margin the run was judged with"
         rows = {r[0]: r[1:] for r in client.query(
             "SELECT config_id, outcome, held_slo, baseline, winner, rate_rps, cost_per_mtok, config FROM replay_results"
         ).result_rows}  # fmt: skip
