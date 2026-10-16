@@ -6,6 +6,9 @@
 #   docker compose --profile geforce up -d    + nvidia-smi exporter, GeForce GPUs
 #   docker compose --profile mock up -d       + two fake engines, no GPU needed
 #
+# ico's two images are pulled from ghcr.io at the release this file came with
+# (ICO_VERSION). Add --build to build them from this checkout instead.
+#
 # The engine and the exporters are other people's containers. Ours never
 # touch a GPU driver.
 
@@ -27,8 +30,8 @@ x-gpu: &gpu
 
 services:
   gateway:
+    image: ghcr.io/gudjon01/ico-gateway:${ICO_VERSION:-0.1.1}
     build: ../gateway
-    image: ico/gateway:dev
     environment:
       ICO_ADMIN_TOKEN: ${ICO_ADMIN_TOKEN:?set ICO_ADMIN_TOKEN in deploy/.env}
     volumes:
@@ -41,6 +44,7 @@ services:
     restart: unless-stopped
 
   collector:
+    image: ghcr.io/gudjon01/ico-collector:${ICO_VERSION:-0.1.1}
     build:
       context: ..
       dockerfile: py/Dockerfile
@@ -125,7 +129,7 @@ services:
   # from ICO_MOCK_1_ARGS, so `ico replay` can be tried on it without a GPU.
   mockengine-1:
     profiles: [mock]
-    image: ico/gateway:dev
+    image: ghcr.io/gudjon01/ico-gateway:${ICO_VERSION:-0.1.1}
     entrypoint: ["/usr/local/bin/mockengine"]
     command: -model mock-model ${ICO_MOCK_1_ARGS:---max-num-seqs 4}
     ports:
@@ -133,7 +137,7 @@ services:
 
   mockengine-2:
     profiles: [mock]
-    image: ico/gateway:dev
+    image: ghcr.io/gudjon01/ico-gateway:${ICO_VERSION:-0.1.1}
     entrypoint: ["/usr/local/bin/mockengine"]
     command: -model mock-model --max-num-seqs 4
 

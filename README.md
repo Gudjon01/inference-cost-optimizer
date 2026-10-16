@@ -104,7 +104,7 @@ scripts/   Toolchain wrappers
 Needs Docker and git. Take the latest release:
 
 ```bash
-git clone --branch v0.1.0 https://github.com/Gudjon01/inference-cost-optimizer.git
+git clone --branch v0.1.1 https://github.com/Gudjon01/inference-cost-optimizer.git
 cd inference-cost-optimizer/deploy
 ```
 
@@ -113,8 +113,12 @@ Then, from `deploy/`:
 ```bash
 cp .env.example .env            # then set the two secrets in it
 cp config.example.yaml config.yaml
-docker compose --profile vllm --profile dcgm up -d --build
+docker compose --profile vllm --profile dcgm up -d
 ```
+
+Compose pulls ico's two images, `ghcr.io/gudjon01/ico-gateway` and
+`ghcr.io/gudjon01/ico-collector`, for amd64 or arm64. Add `--build` to build
+them from the checkout instead.
 
 On a GeForce card use `--profile geforce` instead of `--profile dcgm`, and
 switch the exporter in `config.yaml` as its comment says.
@@ -126,10 +130,21 @@ An engine you run yourself needs two things to be traced: start it with
 `--otlp-traces-endpoint grpc://<collector>:4317`, and set `OTEL_SERVICE_NAME`
 to its replica name and `OTEL_EXPORTER_OTLP_TRACES_INSECURE=true`.
 
+A machine without Docker, such as a RunPod pod, runs the gateway as one static
+binary from the [release](https://github.com/Gudjon01/inference-cost-optimizer/releases/latest):
+
+```bash
+curl -fLO https://github.com/Gudjon01/inference-cost-optimizer/releases/download/v0.1.1/ico-gateway-linux-amd64
+curl -fLO https://github.com/Gudjon01/inference-cost-optimizer/releases/download/v0.1.1/SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+install -m 755 ico-gateway-linux-amd64 gateway
+ICO_ADMIN_TOKEN=... ./gateway -config gateway.yaml
+```
+
 Without a GPU, two fake engines stand in for vLLM:
 
 ```bash
-ICO_CONFIG_FILE=./config.mock.yaml docker compose --profile mock up -d --build
+ICO_CONFIG_FILE=./config.mock.yaml docker compose --profile mock up -d
 ```
 
 Look at what was recorded:
