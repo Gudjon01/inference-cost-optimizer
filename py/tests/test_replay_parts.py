@@ -203,13 +203,72 @@ def test_requests_with_matching_hashes_share_exactly_those_blocks():
     assert synth.shared_tokens() == pytest.approx(128 / 768)
 
 
-def test_a_second_replay_keeps_the_shared_part_and_redraws_the_rest():
-    r = recorded(0, prompt=256, hashes=(11, 22), chars=1024)
-    synth = Synthesizer(POOL, [r], block_chars=256)
-    first, again = synth.prompt(0, use=0).tokens, synth.prompt(0, use=1).tokens
-    assert first[:128] == again[:128]
-    assert first[128:] != again[128:], "otherwise the engine's prefix cache would serve the whole prompt"
-    assert synth.prompt(0, use=0).tokens == first, "the same use is the same prompt, run after run"
+def conversations():
+    """Two conversations under one system prompt (blocks 1, 2), two turns each.
+
+    Each turn repeats the conversation so far and adds to it, as a chat client
+    sends it. 1,024 characters and 256 tokens per request: 64 tokens a block.
+    """
+    return [
+        recorded(0, prompt=256, hashes=(1, 2, 10), chars=1024),  # conversation A, turn 1
+        recorded(1, prompt=256, hashes=(1, 2, 20), chars=1024),  # conversation B, turn 1
+        recorded(2, prompt=256, hashes=(1, 2, 10, 11), chars=1024),  # A, turn 2
+        recorded(3, prompt=256, hashes=(1, 2, 20, 21), chars=1024),  # B, turn 2
+    ]
+
+
+def test_blocks_several_conversations_share_are_the_branch_points_and_above():
+    from ico.replay.prompts import common_blocks
+
+    assert common_blocks(conversations()) == {1, 2}, "the system prompt, not either conversation's own text"
+    assert common_blocks([recorded(0, hashes=(1, 2, 3)), recorded(1, hashes=(1, 2, 3, 4))]) == set(), (
+        "one conversation's turns only ever extend each other"
+    )
+
+
+def test_each_pass_keeps_the_system_prompt_and_starts_conversations_afresh():
+    synth = Synthesizer(POOL, conversations(), block_chars=256)
+    n = len(synth)
+    a1, b1, a2, _ = (synth.prompt(i, use=0).tokens for i in range(n))
+    # Within a pass: everything recorded as shared is shared.
+    assert common_prefix(a1, b1) == 128, "the system prompt"
+    assert common_prefix(a1, a2) == 192, "the system prompt and A's first turn"
+    # The next pass, within the step or in the next step: new conversations under the same system prompt.
+    for next_a1 in (synth.prompt(n, use=0).tokens, synth.prompt(0, use=1).tokens):
+        assert common_prefix(a1, next_a1) == 128, "otherwise A's own turn would come back as a cache hit"
+    assert synth.prompt(2, use=0).tokens == a2, "the same request on the same pass is the same prompt, run after run"
+
+
+def cached_share(prompts, block=16):
+    """Share of prompt tokens a prefix cache of 16-token blocks with no evictions would serve, like vLLM's."""
+    seen, hit, total = set(), 0, 0
+    for tokens in prompts:
+        full = len(tokens) // block
+        prefix_hit = True
+        for k in range(1, full + 1):
+            key = tuple(tokens[: k * block])
+            if prefix_hit and key in seen:
+                hit += block
+            else:
+                prefix_hit = False
+            seen.add(key)
+        total += len(tokens)
+    return hit / total
+
+
+def test_replaying_the_sample_again_and_again_does_not_raise_the_cache_hits():
+    synth = Synthesizer(POOL, conversations(), block_chars=256)
+    n = len(synth)
+    one_pass = cached_share(synth.prompt(i, use=0).tokens for i in range(n))
+    # Five passes in one step, then two more steps of two passes each.
+    many = [synth.prompt(i, use=0).tokens for i in range(5 * n)]
+    many += [synth.prompt(i, use=u).tokens for u in (1, 2) for i in range(2 * n)]
+    # One pass: B's first turn reuses the system prompt, each second turn the system prompt and the first.
+    assert one_pass == pytest.approx((0 + 128 + 192 + 192) / 1024)
+    # Later passes: the system prompt is cached for every first turn too, nothing more.
+    assert cached_share(many) == pytest.approx((512 + 8 * (128 + 128 + 192 + 192)) / (9 * 1024), abs=0.005)
+    # Replaying the same conversations would serve each later pass 896 of its 1,024 tokens.
+    assert cached_share(many) < 0.65
 
 
 def test_shared_blocks_never_push_a_prompt_past_its_length():
