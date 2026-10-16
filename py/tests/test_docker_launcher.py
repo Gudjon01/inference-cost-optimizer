@@ -3,6 +3,7 @@
 import socket
 import time
 import uuid
+from importlib.metadata import version
 
 import httpx
 import pytest
@@ -10,7 +11,8 @@ import pytest
 from ico.replay import sweep
 from ico.replay.launchers import DockerLauncher
 
-IMAGE = "ico/gateway:dev"  # the fake engine ships in the gateway image
+# The fake engine ships in the gateway image, as Compose names it for this version.
+IMAGE = f"ghcr.io/gudjon01/ico-gateway:{version('ico')}"
 
 
 def free_port() -> int:

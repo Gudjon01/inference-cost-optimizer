@@ -1,6 +1,6 @@
 [project]
 name = "ico"
-version = "0.1.0"
+version = "0.1.1"
 description = "Collector, analyzer, replay lab and CLI of the self-hosted inference cost optimizer"
 requires-python = ">=3.10"
 license = "Apache-2.0"
